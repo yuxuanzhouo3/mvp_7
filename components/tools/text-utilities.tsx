@@ -2,7 +2,9 @@
 
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Hash } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
+import { Hash, Copy, Download, Trash2 } from "lucide-react"
 
 export function TextUtilities() {
   const [inputText, setInputText] = useState('')
@@ -155,4 +157,107 @@ export function TextUtilities() {
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-[color:var(--productivity)]">{stats.words}</div>
-              <div className="text-sm text-mute\
+              <div className="text-sm text-muted-foreground">Words</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-[color:var(--productivity)]">{stats.sentences}</div>
+              <div className="text-sm text-muted-foreground">Sentences</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-[color:var(--productivity)]">{stats.paragraphs}</div>
+              <div className="text-sm text-muted-foreground">Paragraphs</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-[color:var(--productivity)]">{stats.lines}</div>
+              <div className="text-sm text-muted-foreground">Lines</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Input Text */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Input Text</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Textarea
+            placeholder="Enter or paste your text here..."
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            className="min-h-[200px] font-mono"
+          />
+          <div className="flex gap-2">
+            <Button onClick={clearAll} variant="outline" size="sm">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Clear
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Case Conversion */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Case Conversion</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <Button onClick={convertToUpperCase} variant="outline" size="sm">UPPERCASE</Button>
+            <Button onClick={convertToLowerCase} variant="outline" size="sm">lowercase</Button>
+            <Button onClick={convertToTitleCase} variant="outline" size="sm">Title Case</Button>
+            <Button onClick={convertToSentenceCase} variant="outline" size="sm">Sentence case</Button>
+            <Button onClick={convertToCamelCase} variant="outline" size="sm">camelCase</Button>
+            <Button onClick={convertToPascalCase} variant="outline" size="sm">PascalCase</Button>
+            <Button onClick={convertToSnakeCase} variant="outline" size="sm">snake_case</Button>
+            <Button onClick={convertToKebabCase} variant="outline" size="sm">kebab-case</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Text Formatting */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Text Formatting</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <Button onClick={removeDuplicateLines} variant="outline" size="sm">Remove Duplicates</Button>
+            <Button onClick={removeEmptyLines} variant="outline" size="sm">Remove Empty Lines</Button>
+            <Button onClick={() => sortLines(true)} variant="outline" size="sm">Sort A-Z</Button>
+            <Button onClick={() => sortLines(false)} variant="outline" size="sm">Sort Z-A</Button>
+            <Button onClick={reverseLines} variant="outline" size="sm">Reverse Lines</Button>
+            <Button onClick={addLineNumbers} variant="outline" size="sm">Add Line Numbers</Button>
+            <Button onClick={trimWhitespace} variant="outline" size="sm">Trim Whitespace</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Output Text */}
+      {processedText && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Processed Text</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Textarea
+              value={processedText}
+              readOnly
+              className="min-h-[200px] font-mono"
+            />
+            <div className="flex gap-2">
+              <Button onClick={() => copyToClipboard(processedText)} variant="outline" size="sm">
+                <Copy className="w-4 h-4 mr-2" />
+                Copy
+              </Button>
+              <Button onClick={() => downloadAsFile(processedText, 'processed-text.txt')} variant="outline" size="sm">
+                <Download className="w-4 h-4 mr-2" />
+                Download
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
