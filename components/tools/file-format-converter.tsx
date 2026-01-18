@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Upload, X, Download, FileText, ArrowRight } from "lucide-react"
 import { useDropzone } from "react-dropzone"
+import { useI18n } from '@/lib/i18n/context'
 
 interface ConversionFile {
   id: string
@@ -33,6 +34,7 @@ const supportedFormats = {
 }
 
 export function FileFormatConverter() {
+  const { t } = useI18n()
   const [files, setFiles] = useState<ConversionFile[]>([])
   const [outputFormat, setOutputFormat] = useState("pdf")
   const [isConverting, setIsConverting] = useState(false)
@@ -128,140 +130,141 @@ export function FileFormatConverter() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Upload Area */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Upload className="w-5 h-5 text-[color:var(--file-converters)]" />
-            Upload Documents
-          </CardTitle>
-          <CardDescription>Upload Word, PowerPoint, or Excel files for conversion</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div
-            {...getRootProps()}
-            className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-              isDragActive
-                ? "border-[color:var(--file-converters)] bg-[color:var(--file-converters)]/5"
-                : "border-border hover:border-[color:var(--file-converters)]/50"
-            }`}
-          >
-            <input {...getInputProps()} />
-            <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-            {isDragActive ? (
-              <p className="text-[color:var(--file-converters)]">Drop the files here...</p>
-            ) : (
-              <div>
-                <p className="text-lg font-medium mb-2">Drop documents here or click to upload</p>
-                <p className="text-sm text-muted-foreground">Supports DOC, DOCX, PPT, PPTX, XLS, XLSX formats</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Output Format Selection */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Output Format</CardTitle>
-          <CardDescription>Choose the format you want to convert your files to</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Select value={outputFormat} onValueChange={setOutputFormat}>
-            <SelectTrigger className="w-full md:w-64">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {supportedFormats.output.map((format) => (
-                <SelectItem key={format.value} value={format.value}>
-                  {format.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
-      {/* File List */}
-      {files.length > 0 && (
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Upload Area */}
         <Card>
           <CardHeader>
-            <CardTitle>Files to Convert ({files.length})</CardTitle>
-            <CardDescription>Review your files before conversion</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Upload className="w-5 h-5 text-[color:var(--file-converters)]" />
+              {t('fileFormatConverter.uploadDocuments')}
+            </CardTitle>
+            <CardDescription>{t('fileFormatConverter.uploadDescription')}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {files.map((file) => (
-                <div key={file.id} className="flex items-center gap-4 p-4 border rounded-lg">
-                  <div className="flex-shrink-0">{getFileIcon(file.type)}</div>
-
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{file.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatFileSize(file.size)} • {file.type.toUpperCase()}
-                    </p>
+            <div
+                {...getRootProps()}
+                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                    isDragActive
+                        ? "border-[color:var(--file-converters)] bg-[color:var(--file-converters)]/5"
+                        : "border-border hover:border-[color:var(--file-converters)]/50"
+                }`}
+            >
+              <input {...getInputProps()} />
+              <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+              {isDragActive ? (
+                  <p className="text-[color:var(--file-converters)]">{t('fileFormatConverter.dropActive')}</p>
+              ) : (
+                  <div>
+                    <p className="text-lg font-medium mb-2">{t('fileFormatConverter.dropDocuments')}</p>
+                    <p className="text-sm text-muted-foreground">{t('fileFormatConverter.supportedFormats')}</p>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <ArrowRight className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">{outputFormat.toUpperCase()}</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-medium ${getStatusColor(file.status)}`}>
-                      {file.status === "pending" && "Ready"}
-                      {file.status === "converting" && "Converting..."}
-                      {file.status === "completed" && "Completed"}
-                      {file.status === "error" && "Error"}
-                    </span>
-
-                    {file.status === "completed" && (
-                      <Button variant="outline" size="sm" onClick={() => downloadFile(file)} className="gap-1">
-                        <Download className="w-3 h-3" />
-                        Download
-                      </Button>
-                    )}
-
-                    {file.status === "pending" && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeFile(file.id)}
-                        className="text-red-500 hover:text-red-600"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
-      )}
 
-      {/* Convert Button */}
-      <div className="flex justify-center">
-        <Button
-          onClick={convertFiles}
-          disabled={files.length === 0 || isConverting}
-          size="lg"
-          className="gap-2 bg-[color:var(--file-converters)] hover:bg-[color:var(--file-converters)]/90 text-white"
-        >
-          {isConverting ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Converting Files...
-            </>
-          ) : (
-            <>
-              <Download className="w-4 h-4" />
-              Convert All Files
-            </>
-          )}
-        </Button>
+        {/* Output Format Selection */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('fileFormatConverter.outputFormat')}</CardTitle>
+            <CardDescription>{t('fileFormatConverter.chooseOutputFormat')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Select value={outputFormat} onValueChange={setOutputFormat}>
+              <SelectTrigger className="w-full md:w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {supportedFormats.output.map((format) => (
+                    <SelectItem key={format.value} value={format.value}>
+                      {format.label}
+                    </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+
+        {/* File List */}
+        {files.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>{t('fileFormatConverter.filesToConvert')} ({files.length})</CardTitle>
+                <CardDescription>{t('fileFormatConverter.reviewFiles')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {files.map((file) => (
+                      <div key={file.id} className="flex items-center gap-4 p-4 border rounded-lg">
+                        <div className="flex-shrink-0">{getFileIcon(file.type)}</div>
+
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{file.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {formatFileSize(file.size)} • {file.type.toUpperCase()}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">{outputFormat.toUpperCase()}</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                    <span className={`text-sm font-medium ${getStatusColor(file.status)}`}>
+                      {file.status === "pending" && t('fileFormatConverter.ready')}
+                      {file.status === "converting" && t('fileFormatConverter.converting')}
+                      {file.status === "completed" && t('fileFormatConverter.completed')}
+                      {file.status === "error" && t('fileFormatConverter.error')}
+                    </span>
+
+                          {file.status === "completed" && (
+                              <Button variant="outline" size="sm" onClick={() => downloadFile(file)} className="gap-1">
+                                <Download className="w-3 h-3" />
+                                {t('fileFormatConverter.download')}
+                              </Button>
+                          )}
+
+                          {file.status === "pending" && (
+                              <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeFile(file.id)}
+                                  className="text-red-500 hover:text-red-600"
+                              >
+                                <X className="w-4 h-4" />
+                                {t('fileFormatConverter.remove')}
+                              </Button>
+                          )}
+                        </div>
+                      </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+        )}
+
+        {/* Convert Button */}
+        <div className="flex justify-center">
+          <Button
+              onClick={convertFiles}
+              disabled={files.length === 0 || isConverting}
+              size="lg"
+              className="gap-2 bg-[color:var(--file-converters)] hover:bg-[color:var(--file-converters)]/90 text-white"
+          >
+            {isConverting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  {t('fileFormatConverter.convertingFiles')}
+                </>
+            ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  {t('fileFormatConverter.convertAllFiles')}
+                </>
+            )}
+          </Button>
+        </div>
       </div>
-    </div>
   )
 }
