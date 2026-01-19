@@ -9,16 +9,22 @@ WORKDIR /app
 
 # ========== 构建时环境变量声明 ==========
 # 只声明必须在构建时使用的变量
+# 注意：敏感配置（如数据库、API密钥等）不应在此处设置，仅在运行时注入
 ARG NODE_ENV=production
 
 # 将 ARG 转换为 ENV，使构建过程能访问这些变量
 ENV NODE_ENV=$NODE_ENV
-#ENV STRIPE_SECRET_KEY=sk_test_dummy
-#ENV STRIPE_WEBHOOK_SECRET=whsec_dummy
-#ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_dummy
-#ENV NEXT_PUBLIC_SUPABASE_URL=https://pvsxxommbwtgzllprujd.supabase.co
-#ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_S2mdz79ny6YxOKPVFvBLqA_hGqJLJKx
-#ENV SUPABASE_SERVICE_ROLE_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.dummy_service
+
+# 构建时不需要设置敏感配置，所有敏感配置将在运行时注入
+# 以下是云环境配置示例（实际部署时由平台注入）：
+# 中国区部署示例：
+#   NEXT_PUBLIC_WECHAT_CLOUDBASE_ID=your_cloudbase_env_id
+#   CLOUDBASE_SECRET_ID=your_secret_id
+#   CLOUDBASE_SECRET_KEY=your_secret_key
+# 国际区部署示例：
+#   NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+#   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
 # ⚠️ 重要：移除所有其他 ARG 和 ENV 声明
 # 所有与应用配置相关的变量（数据库、API密钥、认证等）
@@ -50,27 +56,33 @@ WORKDIR /app
 #
 # 部署平台（腾讯云、Vercel等）需要在运行时注入以下变量：
 #
-# 前端配置（通过 /api/auth/config API 读取）：
-# - MY_NEXT_PUBLIC_APP_URL
-# - MY_NEXT_PUBLIC_SUPABASE_URL
-# - MY_NEXT_PUBLIC_SUPABASE_ANON_KEY
-# - MY_NEXT_PUBLIC_WECHAT_CLOUDBASE_ID
-# - MY_NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-# - MY_NEXT_PUBLIC_ALIPAY_APP_ID
+# 中国区部署（CN）- CloudBase 配置：
+# - NEXT_PUBLIC_WECHAT_CLOUDBASE_ID (必需: CloudBase 环境 ID)
+# - CLOUDBASE_SECRET_ID (必需: 腾讯云 Secret ID)
+# - CLOUDBASE_SECRET_KEY (必需: 腾讯云 Secret Key)
+# - VITE_CLOUDBASE_ACCESS_KEY (推荐: CloudBase 访问密钥)
+# - NEXT_PUBLIC_DEPLOYMENT_REGION=CN (必需: 部署区域)
 #
-# 后端密钥（服务端 API 使用）：
-# - WECHAT_APP_SECRET
-# - WECHAT_PAY_API_V3_KEY
-# - WECHAT_PAY_PRIVATE_KEY
-# - DEEPSEEK_API_KEY
-# - OPENAI_API_KEY
-# - ANTHROPIC_API_KEY
-# - 等其他 API 密钥
+# 国际区部署（INTL）- Supabase 配置：
+# - NEXT_PUBLIC_SUPABASE_URL (必需: Supabase 项目 URL)
+# - NEXT_PUBLIC_SUPABASE_ANON_KEY (必需: Supabase 匿名密钥)
+# - SUPABASE_SERVICE_ROLE_KEY (必需: Supabase 服务角色密钥)
+# - NEXT_PUBLIC_DEPLOYMENT_REGION=INTL (必需: 部署区域)
+#
+# 通用配置：
+# - NEXT_PUBLIC_SITE_URL (必需: 站点 URL)
+# - NEXT_PUBLIC_APP_NAME (可选: 应用名称)
+#
+# 支付配置（按需设置）：
+# - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY / STRIPE_SECRET_KEY (Stripe 支付)
+# - ALIPAY_APP_ID / ALIPAY_PRIVATE_KEY / ALIPAY_PUBLIC_KEY (支付宝)
+# - WECHAT_PAY_MCH_ID / WECHAT_PAY_API_V3_KEY / WECHAT_PAY_PRIVATE_KEY (微信支付)
 #
 # ⚠️ 关键原则：
 # 1. 构建时不硬编码任何配置
 # 2. 所有配置在运行时由部署环境提供
 # 3. 这样同一个镜像可以用于不同的环境（开发、测试、生产等）
+# 4. 中国区部署必须包含 NEXT_PUBLIC_WECHAT_CLOUDBASE_ID、CLOUDBASE_SECRET_ID、CLOUDBASE_SECRET_KEY
 
 ARG PORT=3000
 ENV PORT=$PORT
@@ -96,4 +108,5 @@ USER nextjs
 EXPOSE 3000
 
 # 启动应用
-CMD ["pnpm", "start"]
+# 在启动前验证环境配置
+CMD ["sh", "-c", "node lib/utils/config-validator-entry.js && pnpm start"]
