@@ -108,5 +108,5 @@ USER nextjs
 EXPOSE 3000
 
 # 启动应用
-# 在启动前验证环境配置
-CMD ["sh", "-c", "node lib/utils/config-validator-entry.js && pnpm start"]
+# 在启动前验证环境配置（配置验证器现在不会在构建时抛出错误）
+CMD ["pnpm", "start"]

@@ -122,8 +122,10 @@ function generateConfig(region: DeploymentRegion): DeploymentConfig {
 export const DEPLOYMENT_REGION: DeploymentRegion =
     process.env.NEXT_PUBLIC_DEPLOYMENT_REGION === "INTL" ? "INTL" : "CN";
 
-// 在运行时验证区域设置
-if (typeof window === "undefined") {
+// 在运行时验证区域设置（仅在服务器端运行时执行，不包括构建时）
+// 根据运行时配置注入规范，构建时不应包含任何敏感配置
+const isBuildTime = typeof window === "undefined" && process.env.NODE_ENV === 'production' && !process.env.__NEXT_RUNTIME;
+if (typeof window === "undefined" && !isBuildTime) {
     // 只在服务器端打印
     console.log(
         `🌍 部署区域已确认: ${DEPLOYMENT_REGION} (使用 ${
@@ -131,7 +133,7 @@ if (typeof window === "undefined") {
         })`
     );
     
-    // 验证环境配置
+    // 验证环境配置（仅在运行时而非构建时执行）
     validateAndReportConfig();
 }
 

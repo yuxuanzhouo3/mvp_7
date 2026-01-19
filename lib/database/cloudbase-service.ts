@@ -9,6 +9,14 @@ function initCloudBase() {
     if (cachedApp) {
         return cachedApp;
     }
+    
+    // 检查是否在构建环境中（构建时跳过初始化以避免错误）
+    const isBuildTime = typeof window === "undefined" && process.env.NODE_ENV === 'production' && !process.env.__NEXT_RUNTIME;
+    if (isBuildTime) {
+        console.log(" [CloudBase Service] 构建时跳过 CloudBase 初始化");
+        return null;
+    }
+
     console.log(" [CloudBase Service] 初始化 CloudBase", process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID,
         process.env.CLOUDBASE_SECRET_ID, process.env.CLOUDBASE_SECRET_KEY);
     cachedApp = cloudbase.init({
@@ -87,6 +95,12 @@ export async function loginUser(
         console.log(" [CloudBase Service] 开始登录，邮箱:", email);
 
         const app = initCloudBase();
+        if (!app) {
+            return {
+                success: false,
+                error: "CloudBase 未正确初始化，可能处于构建环境中",
+            };
+        }
         const db = app.database();
         const usersCollection = db.collection("web_users");
 
@@ -180,6 +194,12 @@ export async function signupUser(
         console.log(" [CloudBase Service] 开始注册，邮箱:", email);
 
         const app = initCloudBase();
+        if (!app) {
+            return {
+                success: false,
+                error: "CloudBase 未正确初始化，可能处于构建环境中",
+            };
+        }
         const db = app.database();
         const usersCollection = db.collection("web_users");
 
@@ -257,8 +277,8 @@ export async function signupUser(
             accessToken,
             refreshToken: refreshTokenValue,
             tokenMeta: {
-                accessTokenExpiresIn: 3600, // 1 hour
-                refreshTokenExpiresIn: 604800, // 7 days
+                accessTokenExpiresIn: 3600, // 1小时
+                refreshTokenExpiresIn: 604800, // 7天
             },
         };
     } catch (error: any) {
@@ -272,6 +292,9 @@ export async function signupUser(
 
 export function getDatabase() {
     const app = initCloudBase();
+    if (!app) {
+        throw new Error('CloudBase 未初始化，可能处于构建环境中，请确保在运行时提供正确的环境变量');
+    }
     return app.database();
 }
 
@@ -299,7 +322,7 @@ export async function downloadFileFromCloudBase(fileID: string): Promise<Buffer>
 
         // 验证 CloudBase 初始化
         if (!app) {
-            throw new Error('CloudBase 初始化失败，请检查环境变量 NEXT_PUBLIC_WECHAT_CLOUDBASE_ID, CLOUDBASE_SECRET_ID, CLOUDBASE_SECRET_KEY');
+            throw new Error('CloudBase 初始化失败，可能处于构建环境中，请确保在运行时提供环境变量 NEXT_PUBLIC_WECHAT_CLOUDBASE_ID, CLOUDBASE_SECRET_ID, CLOUDBASE_SECRET_KEY');
         }
 
         const res = await app.downloadFile({
@@ -339,6 +362,9 @@ export async function cloudbaseSignUpWithEmail(
 ): Promise<{ success: boolean; user?: CloudBaseUser; message: string; token?: string }> {
     try {
         const app = initCloudBase()
+        if (!app) {
+            return { success: false, message: 'CloudBase 未正确初始化，可能处于构建环境中' }
+        }
         const db = app.database()
         const usersCollection = db.collection('web_users')
 
@@ -398,6 +424,9 @@ export async function cloudbaseSignInWithEmail(
 ): Promise<{ success: boolean; user?: CloudBaseUser; message: string; token?: string }> {
     try {
         const app = initCloudBase()
+        if (!app) {
+            return { success: false, message: 'CloudBase 未正确初始化，可能处于构建环境中' }
+        }
         const db = app.database()
         const usersCollection = db.collection('web_users')
 

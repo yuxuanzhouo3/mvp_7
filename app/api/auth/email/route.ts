@@ -6,7 +6,6 @@ import { getDatabase } from '@/lib/database/cloudbase-service'
 import { DEPLOYMENT_REGION } from '@/lib/config/deployment.config'
 // 服务器端Supabase客户端（无需localStorage）
 
-const db = getDatabase()
 function createServerClient() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -56,15 +55,8 @@ async function cloudbaseEmailAuth(email: string, password: string, mode: 'login'
     try {
         console.log('[国内用户] 使用腾讯云CloudBase数据库')
 
-        // 初始化CloudBase
-        // const app = cloudbase.init({
-        //   env: process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID!,
-        //   secretId: process.env.CLOUDBASE_SECRET_ID!,
-        //   secretKey: process.env.CLOUDBASE_SECRET_KEY!
-        // })
-        //
-        // const db = app.database()
-        // const usersCollection =
+        // 动态获取数据库连接（在函数执行时才初始化，避免构建时错误）
+        const db = getDatabase();
 
         if (mode === 'signup') {
             // 检查邮箱是否已存在
@@ -100,6 +92,7 @@ async function cloudbaseEmailAuth(email: string, password: string, mode: 'login'
             }
         } else {
             // 登录：查找用户
+            const db = getDatabase(); // 确保在登录分支中也获取数据库连接
             const userResult = await db.collection('web_users').where({ email }).get()
             console.log('用户数据:', userResult.data)
             if (!userResult.data || userResult.data.length === 0) {
