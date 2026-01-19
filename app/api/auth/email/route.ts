@@ -109,11 +109,11 @@ async function cloudbaseEmailAuth(email: string, password: string, mode: 'login'
             const user = userResult.data[0]
 
             // 验证密码
-            // const isPasswordValid = await bcrypt.compare(password, user.password)
-            // console.log('密码验证结果:', isPasswordValid)
-            // if (!isPasswordValid) {
-            //   return { error: '用户不存在或密码错误' }
-            // }
+            const isPasswordValid = await bcrypt.compare(password, user.password)
+            console.log('密码验证结果:', isPasswordValid)
+            if (!isPasswordValid) {
+              return { error: '用户不存在或密码错误' }
+            }
 
             return {
                 user: {

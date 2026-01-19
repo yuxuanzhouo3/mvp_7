@@ -465,7 +465,7 @@ export function Dashboard() {
   const signIn = async (email:string, password:string) => {
     try {
       const response = await fetch(
-          `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/auth/email`,
+          `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/auth/email`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -697,7 +697,7 @@ export function Dashboard() {
       // });
       // 首先注册用户
       const response = await fetch(
-          `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/auth/email`,
+          `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/auth/email`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -911,7 +911,7 @@ export function Dashboard() {
                             className="flex items-center space-x-2 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
                         >
                           <img
-                              src={user.avatar_url || '/default-avatar.png'}
+                              src={user.avatar_url || '/placeholder-user.jpg'}
                               alt="Avatar"
                               className="w-6 h-6 rounded-full"
                           />

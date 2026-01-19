@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
                 `${process.env.NEXT_PUBLIC_SITE_URL}/?error=wechat_auth_failed`
             )
         }
-
+        console.log('✅ 相关微信配置NEXT_PUBLIC_WECHAT_APP_ID:', process.env.NEXT_PUBLIC_WECHAT_APP_ID)
+        console.log('✅ 相关微信配置NEXT_PUBLIC_WECHAT_APP_SECRET:', process.env.NEXT_PUBLIC_WECHAT_APP_SECRET)
         // 通过code获取access_token
         const tokenResponse = await fetch(
             `https://api.weixin.qq.com/sns/oauth2/access_token?` +
@@ -131,18 +132,18 @@ export async function GET(req: NextRequest) {
 
             sessionStorage.setItem('user', JSON.stringify(tokenPayload))
 
-            const token = jwt.sign(
-                tokenPayload,
-                process.env.JWT_SECRET || 'fallback-secret-key-for-development-only',
-                { expiresIn: expiresIn }
-            )
+            // const token = jwt.sign(
+            //     tokenPayload,
+            //     process.env.JWT_SECRET || 'fallback-secret-key-for-development-only',
+            //     { expiresIn: expiresIn }
+            // )
 
             console.log('✅ [JWT Token Generated]: For WeChat user', userInfo.nickname)
 
             // 重定向回首页，并传递登录信息
             const redirectUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL!)
             redirectUrl.searchParams.set('wechat_login', 'success')
-            redirectUrl.searchParams.set('token', token)
+            redirectUrl.searchParams.set('token', 'token123')
             redirectUrl.searchParams.set('user', encodeURIComponent(JSON.stringify({
                 id: userId,
                 name: userInfo.nickname,
@@ -154,11 +155,10 @@ export async function GET(req: NextRequest) {
 
             return NextResponse.redirect(redirectUrl.toString())
         } catch (error) {
-            alert("save_user_failed:{}"+ error)
             console.error('❌ 保存微信用户信息失败:', error)
-            // return NextResponse.redirect(
-            //   `${process.env.NEXT_PUBLIC_SITE_URL}/?error=save_user_failed`
-            // )
+            return NextResponse.redirect(
+              `${process.env.NEXT_PUBLIC_SITE_URL}/?error=save_user_failed`
+            )
         }
     } catch (error: any) {
         console.error('❌ 微信登录回调处理失败:', error)

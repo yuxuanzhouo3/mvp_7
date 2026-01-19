@@ -9,12 +9,14 @@ function initCloudBase() {
     if (cachedApp) {
         return cachedApp;
     }
-
+    console.log(" [CloudBase Service] 初始化 CloudBase", process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID,
+        process.env.CLOUDBASE_SECRET_ID, process.env.CLOUDBASE_SECRET_KEY);
     cachedApp = cloudbase.init({
         env: process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID || "",
         secretId: process.env.CLOUDBASE_SECRET_ID || "",
         secretKey: process.env.CLOUDBASE_SECRET_KEY || "",
     });
+
 
     return cachedApp;
 }
