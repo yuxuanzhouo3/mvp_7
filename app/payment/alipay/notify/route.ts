@@ -2,11 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as AlipaySdk from 'alipay-sdk'
 import { createClient } from '@supabase/supabase-js'
 
-// Supabase 客户端
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+// 延迟初始化 Supabase 客户端，避免在构建时初始化
+let supabaseInstance: any = null;
+
+function getSupabase() {
+    if (!supabaseInstance) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        
+        if (!supabaseUrl || !supabaseKey) {
+            throw new Error('Supabase 配置缺失: NEXT_PUBLIC_SUPABASE_URL 和/或 SUPABASE_SERVICE_ROLE_KEY/NEXT_PUBLIC_SUPABASE_ANON_KEY 未设置');
+        }
+        
+        supabaseInstance = createClient(supabaseUrl, supabaseKey);
+    }
+    
+    return supabaseInstance;
+}
 
 // 支付宝配置（与 create/route.ts 保持一致）
 const alipayConfig = {
@@ -75,7 +87,7 @@ export async function POST(req: NextRequest) {
             console.log('💰 [Alipay Notify] 支付成功，更新订单状态')
 
             // 更新订单状态为已支付
-            const { error: updateError } = await supabase
+            const { error: updateError } = await getSupabase()
                 .from('payment_transactions')
                 .update({
                     status: 'completed',
@@ -92,7 +104,7 @@ export async function POST(req: NextRequest) {
             }
 
             // 查询订单信息以更新用户订阅状态
-            const { data: transaction, error: queryError } = await supabase
+            const { data: transaction, error: queryError } = await getSupabase()
                 .from('payment_transactions')
                 .select('*')
                 .eq('transaction_id', trade_no)
@@ -115,7 +127,7 @@ export async function POST(req: NextRequest) {
                 }
 
                 // 更新或创建用户订阅
-                const { error: subscriptionError } = await supabase
+                const { error: subscriptionError } = await getSupabase()
                     .from('subscriptions')
                     .upsert(
                         {
@@ -143,7 +155,7 @@ export async function POST(req: NextRequest) {
             console.log('⚠️ [Alipay Notify] 交易已关闭')
 
             // 更新订单状态为已关闭
-            await supabase
+            await getSupabase()
                 .from('payment_transactions')
                 .update({
                     status: 'cancelled',

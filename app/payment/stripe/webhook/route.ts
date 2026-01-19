@@ -17,10 +17,23 @@ async function getStripe() {
     return stripe;
 }
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+// 延迟初始化 Supabase 客户端，避免在构建时初始化
+let supabase: ReturnType<typeof createClient> | null = null;
+
+function getSupabase() {
+    if (!supabase) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        
+        if (!supabaseUrl || !supabaseKey) {
+            throw new Error('Supabase 配置缺失: NEXT_PUBLIC_SUPABASE_URL 和/或 SUPABASE_SERVICE_ROLE_KEY/NEXT_PUBLIC_SUPABASE_ANON_KEY 未设置');
+        }
+        
+        supabase = createClient(supabaseUrl, supabaseKey);
+    }
+    
+    return supabase;
+}
 
 export async function POST(req: NextRequest) {
     const body = await req.text()
@@ -72,7 +85,7 @@ export async function POST(req: NextRequest) {
         const amountInCents = amountTotal
 
         // 更新Supabase订阅状态（使用 web_subscriptions）
-        const { data: subscriptionRows, error: subError } = await supabase.from('web_subscriptions').upsert({
+        const { data: subscriptionRows, error: subError } = await getSupabase().from('web_subscriptions').upsert({
             user_email: userEmail,
             platform: 'web',
             payment_method: 'stripe',
@@ -97,12 +110,12 @@ export async function POST(req: NextRequest) {
         // 更新用户的 pro 状态（Supabase auth.users metadata）
         try {
             // 查找用户
-            const { data: userData, error: userError } = await supabase.auth.admin.listUsers()
+            const { data: userData, error: userError } = await getSupabase().auth.admin.listUsers()
             const user = userData?.users.find(u => u.email === userEmail)
 
             if (user) {
                 // 更新用户的 metadata，设置 pro 为 true
-                const { error: updateError } = await supabase.auth.admin.updateUserById(
+                const { error: updateError } = await getSupabase().auth.admin.updateUserById(
                     user.id,
                     {
                         user_metadata: {
@@ -129,7 +142,7 @@ export async function POST(req: NextRequest) {
         // 记录支付交易（用于利润统计）
         const paymentFee = Math.round(amountInCents * 0.029 + 30) // Stripe 2.9% + $0.30
         const netAmount = amountInCents - paymentFee
-        const { error: txError } = await supabase.from('web_payment_transactions').insert({
+        const { error: txError } = await getSupabase().from('web_payment_transactions').insert({
             subscription_id: subscriptionRows?.id ?? null,
             user_email: userEmail,
             product_name: 'sitehub',

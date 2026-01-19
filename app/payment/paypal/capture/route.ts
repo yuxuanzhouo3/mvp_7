@@ -15,10 +15,23 @@ const client = new Client({
 
 const ordersController = new OrdersController(client)
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+// 延迟初始化 Supabase 客户端，避免在构建时初始化
+let supabaseInstance: any = null;
+
+function getSupabase() {
+    if (!supabaseInstance) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        
+        if (!supabaseUrl || !supabaseKey) {
+            throw new Error('Supabase 配置缺失: NEXT_PUBLIC_SUPABASE_URL 和/或 SUPABASE_SERVICE_ROLE_KEY/NEXT_PUBLIC_SUPABASE_ANON_KEY 未设置');
+        }
+        
+        supabaseInstance = createClient(supabaseUrl, supabaseKey);
+    }
+    
+    return supabaseInstance;
+}
 
 export async function POST(req: NextRequest) {
     try {
@@ -74,7 +87,7 @@ export async function POST(req: NextRequest) {
         const amountInCents = Math.round(parseFloat(paymentAmount) * 100)
 
         // 更新Supabase订阅状态（使用 web_subscriptions）
-        const { data: subscriptionRows, error: subError } = await supabase.from('web_subscriptions').upsert({
+        const { data: subscriptionRows, error: subError } = await getSupabase().from('web_subscriptions').upsert({
             user_email: userEmail,
             platform: 'web',
             payment_method: 'paypal',
@@ -101,7 +114,7 @@ export async function POST(req: NextRequest) {
         const netAmount = amountInCents - paymentFee
         const captureId = order.purchaseUnits?.[0]?.payments?.captures?.[0]?.id
 
-        const { error: txError } = await supabase.from('web_payment_transactions').insert({
+        const { error: txError } = await getSupabase().from('web_payment_transactions').insert({
             subscription_id: subscriptionRows?.id ?? null,
             user_email: userEmail,
             product_name: 'sitehub',

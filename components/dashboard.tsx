@@ -13,12 +13,12 @@ import { LanguageSwitcher } from "@/components/language-switcher"
 import { useLanguage } from "@/components/language-provider";
 import { useTranslations } from "@/lib/i18n";
 import OperationsDashboard from '@/components/tools/OperationsDashboard'
-import {supabase} from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 
 import { passwordSecurity } from '@/lib/security/password-security'
-import { isChinaRegion } from "@/lib/config/region";
-import { createProfileFromEmailUser } from "@/lib/models/user";
-import { register } from '@/lib/auth/login'
+// import { isChinaRegion } from "@/lib/config/region";
+// import { createProfileFromEmailUser } from "@/lib/models/user";
+// import { register } from '@/lib/auth/login'
 // import { UserMenu } from './user-menu'
 
 import {
@@ -353,7 +353,7 @@ export function Dashboard() {
       // Update user credits
       const newCredits = user.credits + creditAmount
       if (process.env.NEXT_PUBLIC_GOOGLESIGIN) {
-        const {data, error} = await supabase
+        const {data, error} = await getSupabaseClient()
             .from('user')
             .update({credits: newCredits})
             .eq('id', user.id).select()
@@ -361,7 +361,7 @@ export function Dashboard() {
         if (error) throw error
 
         // Record transaction
-        await supabase
+        await getSupabaseClient()
             .from('credit_transactions')
             .insert({
               user_id: user.id,
@@ -408,7 +408,7 @@ export function Dashboard() {
 
       if (process.env.NEXT_PUBLIC_GOOGLESIGIN) {
         // Update user subscription
-        const {error} = await supabase
+        const {error} = await getSupabaseClient()
             .from('users')
             .update({
               subscription_tier: selectedPlan.tier,
@@ -518,7 +518,7 @@ export function Dashboard() {
       // } else {
       //
       //   //海外用户
-      //   let {data: user, error} = await supabase
+      //   let {data: user, error} = await getSupabaseClient()
       //       .from('user')
       //       .select('*')
       //       .eq('email', email)
@@ -584,7 +584,7 @@ export function Dashboard() {
   }
 
   const getUser = async (email:string) => {
-    let { data: user, error } = await supabase
+    let { data: user, error } = await getSupabaseClient()
         .from('user')
         .select('*')
         .eq('email', email)
@@ -606,7 +606,7 @@ export function Dashboard() {
   // 添加谷歌登录函数
   const signInWithGoogle = async () => {
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await getSupabaseClient().auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
@@ -623,7 +623,7 @@ export function Dashboard() {
       console.log('Google 登录跳转成功:', data);
 
       //判断是否添加用户信息
-      let { data: user, error2 } = await supabase
+      let { data: user, error2 } = await getSupabaseClient()
           .from('user')
           .select('*')
           .eq('email', data.user?.email)
@@ -634,7 +634,7 @@ export function Dashboard() {
       }
       if (!user) {
         // 添加用户信息
-        const { error } = await supabase
+        const { error } = await getSupabaseClient()
             .from('user')
             .insert({
               email: data.user?.email,
@@ -966,7 +966,7 @@ export function Dashboard() {
                               {/**/}
                               <button
                                   onClick={() => {
-                                    supabase.auth.signOut();
+                                    getSupabaseClient().auth.signOut();
                                     setUser(null);
                                     const profileDropdown = document.getElementById('profile-dropdown');
                                     if (profileDropdown) {
@@ -1400,7 +1400,7 @@ export function Dashboard() {
                             console.log('Google注册成功', result);
                             //数据库记录用户信息
                             try {
-                              const { data, error } = await supabase
+                              const { data, error } = await getSupabaseClient()
                                   .from('user')
                                   .insert([
                                     { username: result.data} // email: result.data.email, full_name: result.data.full_name, avatar_url: result.data.avatar_url},

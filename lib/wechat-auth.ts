@@ -1,6 +1,6 @@
 
 import OAuth from 'wechat-oauth'
-import { supabase } from './supabase'
+import { getSupabaseClient } from './supabase'
 
 interface WeChatTokenResult {
     data: {
@@ -62,7 +62,7 @@ export const wechatAuth = {
     authenticateUser: async (userInfo: WeChatUserInfo) => {
         try {
             // First, try to find existing user by WeChat openid
-            const { data: existingUser, error: fetchError } = await supabase
+            const { data: existingUser, error: fetchError } = await getSupabaseClient()
                 .from('profiles')
                 .select('*')
                 .eq('wechat_openid', userInfo.openid)
@@ -70,7 +70,7 @@ export const wechatAuth = {
 
             if (existingUser) {
                 // User exists, create a session
-                const { data: sessionData, error: sessionError } = await supabase.auth.signInWithPassword({
+                const { data: sessionData, error: sessionError } = await getSupabaseClient().auth.signInWithPassword({
                     email: existingUser.email,
                     password: 'wechat_user_' + userInfo.openid // This should be handled differently in production
                 })
@@ -85,7 +85,7 @@ export const wechatAuth = {
                 const email = `${userInfo.openid}@wechat.local`
                 const password = 'wechat_user_' + userInfo.openid + '_' + Math.random().toString(36).substring(7)
 
-                const { data: authData, error: authError } = await supabase.auth.signUp({
+                const { data: authData, error: authError } = await getSupabaseClient().auth.signUp({
                     email,
                     password,
                     options: {

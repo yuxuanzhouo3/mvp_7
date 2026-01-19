@@ -2,11 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import * as AlipaySdk from 'alipay-sdk'
 import { createClient } from '@supabase/supabase-js'
 
-// Supabase 客户端
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder_key'
-)
+// 延迟初始化 Supabase 客户端，避免在构建时初始化
+let supabaseInstance: any = null;
+
+function getSupabase() {
+    if (!supabaseInstance) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        
+        if (!supabaseUrl || !supabaseKey) {
+            throw new Error('Supabase 配置缺失: NEXT_PUBLIC_SUPABASE_URL 和/或 SUPABASE_SERVICE_ROLE_KEY/NEXT_PUBLIC_SUPABASE_ANON_KEY 未设置');
+        }
+        
+        supabaseInstance = createClient(supabaseUrl, supabaseKey);
+    }
+    
+    return supabaseInstance;
+}
 
 // 支付宝支付配置
 const alipayConfig = {
@@ -125,7 +137,7 @@ export async function POST(req: NextRequest) {
         console.log('✅ [Alipay] 支付链接生成成功')
 
         // 保存订单到数据库
-        const { error: dbError } = await supabase.from('payment_transactions').insert({
+        const { error: dbError } = await getSupabase().from('payment_transactions').insert({
             user_email: userEmail,
             plan_type: planType,
             billing_cycle: billingCycle,

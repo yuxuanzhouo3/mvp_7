@@ -3,11 +3,23 @@ import { Wechatpay } from 'wechatpay-axios-plugin'
 import { createClient } from '@supabase/supabase-js'
 import { db as cloudbaseDB } from '@/lib/database/cloudbase-client'
 
-// 初始化Supabase客户端
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+// 延迟初始化 Supabase 客户端，避免在构建时初始化
+let supabaseInstance: any = null;
+
+function getSupabase() {
+    if (!supabaseInstance) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        
+        if (!supabaseUrl || !supabaseKey) {
+            throw new Error('Supabase 配置缺失: NEXT_PUBLIC_SUPABASE_URL 和/或 SUPABASE_SERVICE_ROLE_KEY/NEXT_PUBLIC_SUPABASE_ANON_KEY 未设置');
+        }
+        
+        supabaseInstance = createClient(supabaseUrl, supabaseKey);
+    }
+    
+    return supabaseInstance;
+}
 
 // 微信支付配置
 const wechatpayConfig = {
@@ -118,7 +130,7 @@ export async function POST(req: NextRequest) {
             // 如果腾讯云没更新成功，尝试Supabase
             if (!updated) {
                 try {
-                    const { error } = await supabase
+                    const { error } = await getSupabase()
                         .from('web_payment_transactions')
                         .update({
                             status: 'completed',
@@ -162,7 +174,7 @@ export async function POST(req: NextRequest) {
             // 如果腾讯云没找到，从Supabase查询
             if (!transactionRecord) {
                 try {
-                    const { data } = await supabase
+                    const { data } = await getSupabase()
                         .from('web_payment_transactions')
                         .select('*')
                         .eq('transaction_id', out_trade_no)
@@ -228,7 +240,7 @@ export async function POST(req: NextRequest) {
 
                     // 尝试Supabase
                     try {
-                        await supabase
+                        await getSupabase()
                             .from('web_subscriptions')
                             .upsert({
                                 ...subscriptionData,

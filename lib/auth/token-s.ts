@@ -10,7 +10,7 @@ import {
     clearAuthState,
 } from "@/lib/auth/auth-state-manager";
 import { isChinaRegion } from "@/lib/config/region";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 
 class TokenManager {
     private static instance: TokenManager;
@@ -60,7 +60,7 @@ class TokenManager {
                 return token;
             } else {
                 // INTL：从 Supabase session 获取
-                const { data, error } = await supabase.auth.getSession();
+                const { data, error } = await getSupabaseClient().auth.getSession();
                 if (error) {
                     console.warn("⚠️  [TokenManager] Supabase getSession 失败:", error);
                     return null;

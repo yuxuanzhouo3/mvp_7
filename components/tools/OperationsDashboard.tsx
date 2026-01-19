@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
+import { getSupabaseClient } from '../../lib/supabase'
 
 interface SystemStats {
     totalUsers: number
@@ -65,7 +65,7 @@ const OperationsDashboard: React.FC<OperationsDashboardProps> = ({ user, isAdmin
     const loadSystemStats = async () => {
         try {
             // Load total users
-            const { count: totalUsers } = await supabase
+            const { count: totalUsers } = await getSupabaseClient()
                 .from('users')
                 .select('*', { count: 'exact', head: true })
 
@@ -73,13 +73,13 @@ const OperationsDashboard: React.FC<OperationsDashboardProps> = ({ user, isAdmin
             const sevenDaysAgo = new Date()
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
-            const { count: activeUsers } = await supabase
+            const { count: activeUsers } = await getSupabaseClient()
                 .from('users')
                 .select('*', { count: 'exact', head: true })
                 .gte('last_login', sevenDaysAgo.toISOString())
 
             // Load total generations
-            const { count: totalGenerations } = await supabase
+            const { count: totalGenerations } = await getSupabaseClient()
                 .from('generations')
                 .select('*', { count: 'exact', head: true })
 
@@ -100,7 +100,7 @@ const OperationsDashboard: React.FC<OperationsDashboardProps> = ({ user, isAdmin
 
     const loadUsers = async () => {
         try {
-            const { data, error } = await supabase
+            const { data, error } = await getSupabaseClient()
                 .from('users')
                 .select('*')
                 .order('created_at', { ascending: false })
@@ -134,7 +134,7 @@ const OperationsDashboard: React.FC<OperationsDashboardProps> = ({ user, isAdmin
 
     const updateUserStatus = async (userId: string, isActive: boolean) => {
         try {
-            const { error } = await supabase
+            const { error } = await getSupabaseClient()
                 .from('users')
                 .update({ is_active: isActive })
                 .eq('id', userId)
@@ -159,7 +159,7 @@ const OperationsDashboard: React.FC<OperationsDashboardProps> = ({ user, isAdmin
             if (!user) return
 
             const newCredits = user.credits + credits
-            const { error } = await supabase
+            const { error } = await getSupabaseClient()
                 .from('users')
                 .update({ credits: newCredits })
                 .eq('id', userId)
@@ -172,7 +172,7 @@ const OperationsDashboard: React.FC<OperationsDashboardProps> = ({ user, isAdmin
             ))
 
             // Record transaction
-            await supabase
+            await getSupabaseClient()
                 .from('credit_transactions')
                 .insert({
                     user_id: userId,
