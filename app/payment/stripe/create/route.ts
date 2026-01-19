@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2025-09-30.clover',
-})
+// 将 Stripe 初始化移到函数内部，避免构建时初始化
+let stripe: Stripe;
+
+async function getStripe() {
+    if (!stripe) {
+        if (!process.env.STRIPE_SECRET_KEY) {
+            throw new Error('Missing Stripe secret key');
+        }
+        stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+            apiVersion: '2025-09-30.clover',
+        })
+    }
+    return stripe;
+}
 
 export async function POST(req: NextRequest) {
     try {
@@ -17,7 +28,7 @@ export async function POST(req: NextRequest) {
             )
         }
 
-        // 定价（单位：美分）- 正式价格
+        // 定义定价（单位：美分）- 正式价格
         const pricing = {
             pro: {
                 monthly: 1999,     // $19.99
@@ -51,8 +62,9 @@ export async function POST(req: NextRequest) {
             team: 'Team',
         }
 
-        // 创建Stripe Checkout会话
-        const session = await stripe.checkout.sessions.create({
+        // 获取 Stripe 实例并创建Checkout会话
+        const stripeInstance = await getStripe();
+        const session = await stripeInstance.checkout.sessions.create({
             payment_method_types: ['card'],
             line_items: [
                 {

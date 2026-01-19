@@ -2,9 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2025-09-30.clover',
-})
+// 将 Stripe 初始化移到函数内部，避免构建时初始化
+let stripe: Stripe;
+
+async function getStripe() {
+    if (!stripe) {
+        if (!process.env.STRIPE_SECRET_KEY) {
+            throw new Error('Missing Stripe secret key');
+        }
+        stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+            apiVersion: '2025-09-30.clover',
+        })
+    }
+    return stripe;
+}
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,7 +29,8 @@ export async function POST(req: NextRequest) {
     let event: Stripe.Event
 
     try {
-        event = stripe.webhooks.constructEvent(
+        const stripeInstance = await getStripe();
+        event = stripeInstance.webhooks.constructEvent(
             body,
             sig,
             process.env.STRIPE_WEBHOOK_SECRET!
