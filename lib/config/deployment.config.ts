@@ -1,3 +1,5 @@
+import { validateAndReportConfig } from "../utils/config-validator";
+
 /**
  * 部署配置文件
  *
@@ -128,6 +130,9 @@ if (typeof window === "undefined") {
             DEPLOYMENT_REGION === "INTL" ? "Supabase" : "CloudBase"
         })`
     );
+    
+    // 验证环境配置
+    validateAndReportConfig();
 }
 
 /**

@@ -13,12 +13,12 @@ ARG NODE_ENV=production
 
 # 将 ARG 转换为 ENV，使构建过程能访问这些变量
 ENV NODE_ENV=$NODE_ENV
-ENV STRIPE_SECRET_KEY=sk_test_dummy
-ENV STRIPE_WEBHOOK_SECRET=whsec_dummy
-ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_dummy
-ENV NEXT_PUBLIC_SUPABASE_URL=https://pvsxxommbwtgzllprujd.supabase.co
-ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_S2mdz79ny6YxOKPVFvBLqA_hGqJLJKx
-ENV SUPABASE_SERVICE_ROLE_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.dummy_service
+#ENV STRIPE_SECRET_KEY=sk_test_dummy
+#ENV STRIPE_WEBHOOK_SECRET=whsec_dummy
+#ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_dummy
+#ENV NEXT_PUBLIC_SUPABASE_URL=https://pvsxxommbwtgzllprujd.supabase.co
+#ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_S2mdz79ny6YxOKPVFvBLqA_hGqJLJKx
+#ENV SUPABASE_SERVICE_ROLE_KEY=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.dummy_service
 
 # ⚠️ 重要：移除所有其他 ARG 和 ENV 声明
 # 所有与应用配置相关的变量（数据库、API密钥、认证等）
