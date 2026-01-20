@@ -28,25 +28,19 @@ let oauthClient: OAuth | null = null
 
 function getOAuthClient() {
     // 检查是否在构建环境中
-    const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
-    const isStaticGeneration = typeof window === 'undefined' && !process.env.__NEXT_RUNTIME && process.env.NODE_ENV === 'production';
-    
-    if (isBuildPhase || isStaticGeneration) {
-        console.log(" [WeChat Auth] 构建时跳过 WeChat OAuth 初始化");
-        return null;
-    }
-
     if (!oauthClient) {
         if (!process.env.NEXT_PUBLIC_WECHAT_APP_ID || !process.env.NEXT_PUBLIC_WECHAT_APP_SECRET) {
-            throw new Error('WeChat OAuth 未配置，缺少 NEXT_PUBLIC_WECHAT_APP_ID 或 NEXT_PUBLIC_WECHAT_APP_SECRET 环境变量');
+            console.log('⚠️ [WeChat] 缺少微信登录配置，请检查 NEXT_PUBLIC_WECHAT_APP_ID 和 NEXT_PUBLIC_WECHAT_APP_SECRET 环境变量')
+            // throw new Error('WeChat OAuth 未配置，缺少 NEXT_PUBLIC_WECHAT_APP_ID 或 NEXT_PUBLIC_WECHAT_APP_SECRET 环境变量');
+            return null;
         }
-        
+
         oauthClient = new OAuth(
             process.env.NEXT_PUBLIC_WECHAT_APP_ID!,
             process.env.NEXT_PUBLIC_WECHAT_APP_SECRET!
         )
     }
-    
+
     return oauthClient
 }
 
@@ -56,7 +50,7 @@ export const wechatAuth = {
         if (!client) {
             throw new Error('WeChat OAuth 客户端未正确初始化，可能处于构建环境中');
         }
-        
+
         const state = Math.random().toString(36).substring(7)
         return client.getAuthorizeURL(
             `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/auth/wechat/callback`,
@@ -70,7 +64,7 @@ export const wechatAuth = {
         if (!client) {
             throw new Error('WeChat OAuth 客户端未正确初始化，可能处于构建环境中');
         }
-        
+
         return new Promise((resolve, reject) => {
             client.getAccessToken(code, (err: any, result: WeChatTokenResult) => {
                 if (err) reject(err)
@@ -84,7 +78,7 @@ export const wechatAuth = {
         if (!client) {
             throw new Error('WeChat OAuth 客户端未正确初始化，可能处于构建环境中');
         }
-        
+
         return new Promise((resolve, reject) => {
             client.getUser(openid, accessToken, (err: any, result: WeChatUserInfo) => {
                 if (err) reject(err)

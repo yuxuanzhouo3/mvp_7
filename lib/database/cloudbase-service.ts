@@ -18,7 +18,7 @@ function initCloudBase() {
     console.log('使用腾讯云CloudBase数据库，环境配置数据：', process.env.NEXT_PHASE, process.env.NODE_ENV, "RUNTIME:", process.env.__NEXT_RUNTIME)
     const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
     const isStaticGeneration = typeof window === 'undefined' && !process.env.__NEXT_RUNTIME && process.env.NODE_ENV === 'production';
-
+    console.log(" [CloudBase Service] 当前运行环境:isBuildPhase:", isBuildPhase,"isStaticGeneration:",isStaticGeneration)
     if (isBuildPhase || isStaticGeneration) {
         console.log(" [CloudBase Service] 构建时跳过 CloudBase 初始化");
         return null;
