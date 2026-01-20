@@ -27,14 +27,15 @@ export function getSupabaseClient(): SupabaseClient {
     if (!supabaseInstance) {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
         const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        
+
         if (!supabaseUrl || !supabaseAnonKey) {
+            console.error('Supabase 配置缺失: NEXT_PUBLIC_SUPABASE_URL: ', supabaseUrl, 'NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey)
             throw new Error('Supabase 配置缺失: NEXT_PUBLIC_SUPABASE_URL 和/或 NEXT_PUBLIC_SUPABASE_ANON_KEY 未设置')
         }
-        
+
         supabaseInstance = createClient(supabaseUrl, supabaseAnonKey)
     }
-    
+
     return supabaseInstance
 }
 

@@ -940,7 +940,7 @@ export function Dashboard() {
                           <div className="p-4">
                             <div className="flex items-center space-x-3 mb-4">
                               <img
-                                  src={user.avatar_url || '/default-avatar.png'}
+                                  src={user.avatar_url || '/placeholder-user.jpg'}
                                   alt="Avatar"
                                   className="w-12 h-12 rounded-full"
                               />
@@ -986,7 +986,7 @@ export function Dashboard() {
                                   }}
                                   className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
                               >
-                                Sign Out
+                                {t.user.logout}
                               </button>
                             </div>
                           </div>
@@ -1560,7 +1560,7 @@ export function Dashboard() {
                                 : 'bg-gray-200 dark:bg-gray-700'
                         }`}
                     >
-                      {t.payment.year} ({t.payment.savePercent} {t.percent20})
+                      {t.payment.year} ({t.payment.savePercent} {t.payment.month})
                     </button>
                   </div>
                 </div>
@@ -1579,7 +1579,8 @@ export function Dashboard() {
                         <div className="text-xl font-bold mb-2">{plan.name}</div>
                         <div className="text-3xl font-bold mb-4">
                           ${billingCycle === 'monthly' ? plan.monthly_price : plan.yearly_price}
-                          <span className="text-sm font-normal text-gray-600">/{billingCycle === 'monthly' ? t.payment.mo : t.payment.yr}</span>
+                          <span
+                              className="text-sm font-normal text-gray-600">/{billingCycle === 'monthly' ? t.payment.mo : t.payment.yr}</span>
                         </div>
                         <div className="space-y-2 mb-4">
                           <div className="flex items-center">
@@ -1599,6 +1600,12 @@ export function Dashboard() {
                               </div>
                           )}
                         </div>
+                        <button
+                            onClick={() => setShowSubscriptions(false)}
+                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                        >
+                          {t.common.cancel}
+                        </button>
                       </div>
                   ))}
                 </div>
