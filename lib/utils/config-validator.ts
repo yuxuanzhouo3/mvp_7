@@ -117,10 +117,10 @@ export function validateAndReportConfig(): void {
   if (!result.isValid) {
     console.error('\n🚨 配置验证失败，应用可能无法正常运行！');
     
-    // 在开发环境中可以继续运行，但在生产环境中应该抛出错误
     // 根据运行时配置注入规范，构建时不应包含任何敏感配置
     // 所以在构建阶段（静态生成期间）不抛出错误，仅在运行时抛出
-    const isBuildTime = typeof window === 'undefined' && process.env.NODE_ENV === 'production' && !process.env.__NEXT_RUNTIME;
+    // 使用显式环境变量来判断是否为构建时
+    const isBuildTime = process.env.__NEXT_BUILDER || (process.env.NODE_ENV === 'production' && !process.env.__NEXT_RUNTIME);
     
     if (process.env.NODE_ENV === 'production' && !isBuildTime) {
       throw new Error(`缺少必需的环境变量: ${result.missingVariables.join(', ')}`);
