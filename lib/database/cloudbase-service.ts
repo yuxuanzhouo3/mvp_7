@@ -15,20 +15,20 @@ function initCloudBase() {
 
     // 在构建环境中，process.env.NEXT_PHASE 可能为 'phase-production-build'
     // 使用多种方法检测是否为构建时
-    console.log('使用腾讯云CloudBase数据库，环境配置数据：', process.env.NEXT_PHASE, process.env.NODE_ENV, "RUNTIME:", process.env.__NEXT_RUNTIME)
-    const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
-    const isStaticGeneration = typeof window === 'undefined' && !process.env.__NEXT_RUNTIME && process.env.NODE_ENV === 'production';
-    console.log(" [CloudBase Service] 当前运行环境:isBuildPhase:", isBuildPhase,"isStaticGeneration:",isStaticGeneration)
-    if (isBuildPhase || isStaticGeneration) {
-        console.log(" [CloudBase Service] 构建时跳过 CloudBase 初始化");
-        return null;
-    }
-
-    // 确保只在服务器端运行时初始化
-    if (!isServer) {
-        console.log(" [CloudBase Service] 客户端环境，跳过 CloudBase Node SDK 初始化");
-        return null;
-    }
+    // console.log('使用腾讯云CloudBase数据库，环境配置数据：', process.env.NEXT_PHASE, process.env.NODE_ENV, "RUNTIME:", process.env.__NEXT_RUNTIME)
+    // const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+    // const isStaticGeneration = typeof window === 'undefined' && !process.env.__NEXT_RUNTIME && process.env.NODE_ENV === 'production';
+    // console.log(" [CloudBase Service] 当前运行环境:isBuildPhase:", isBuildPhase,"isStaticGeneration:",isStaticGeneration)
+    // if (isBuildPhase || isStaticGeneration) {
+    //     console.log(" [CloudBase Service] 构建时跳过 CloudBase 初始化");
+    //     return null;
+    // }
+    //
+    // // 确保只在服务器端运行时初始化
+    // if (!isServer) {
+    //     console.log(" [CloudBase Service] 客户端环境，跳过 CloudBase Node SDK 初始化");
+    //     return null;
+    // }
 
     // 检查必需的环境变量
     const envId = process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID;
