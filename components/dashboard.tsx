@@ -465,7 +465,7 @@ export function Dashboard() {
   const signIn = async (email:string, password:string) => {
     try {
       const response = await fetch(
-          `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/auth/email`,
+          '/api/auth/email',
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1243,7 +1243,7 @@ export function Dashboard() {
                           const result = await handleWeChatLogin();
                           // 谷歌登录跳转成功，关闭模态框
                           setShowLoginModal(false);
-                          setUser(result.data);
+                          // setUser(result.data);
                           // 登录失败，已在signInWithGoogle函数中处理错误提示
                         } catch (error) {
                           console.error('微信登录异常:', error);
