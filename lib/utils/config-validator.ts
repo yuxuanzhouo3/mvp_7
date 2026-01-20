@@ -109,6 +109,10 @@ export function validateAndReportConfig(): void {
     process.env.NEXT_PUBLIC_DEPLOYMENT_REGION === 'CN' || 
     process.env.NEXT_PUBLIC_DEPLOYMENT_REGION !== 'INTL';
 
+  // 检测是否为构建阶段
+  const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+  const isStaticGeneration = typeof window === 'undefined' && !process.env.__NEXT_RUNTIME && process.env.NODE_ENV === 'production';
+
   console.log(`🔍 检测到部署区域: ${isChinaRegion ? 'CN (中国)' : 'INTL (国际)'}`);
 
   const result = validateEnvironmentConfig(isChinaRegion);
@@ -119,10 +123,7 @@ export function validateAndReportConfig(): void {
     
     // 根据运行时配置注入规范，构建时不应包含任何敏感配置
     // 所以在构建阶段（静态生成期间）不抛出错误，仅在运行时抛出
-    // 使用显式环境变量来判断是否为构建时
-    const isBuildTime = process.env.__NEXT_BUILDER || (process.env.NODE_ENV === 'production' && !process.env.__NEXT_RUNTIME);
-    
-    if (process.env.NODE_ENV === 'production' && !isBuildTime) {
+    if (process.env.NODE_ENV === 'production' && !(isBuildPhase || isStaticGeneration)) {
       throw new Error(`缺少必需的环境变量: ${result.missingVariables.join(', ')}`);
     }
   }

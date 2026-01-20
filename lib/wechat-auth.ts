@@ -27,10 +27,11 @@ interface WeChatUserInfo {
 let oauthClient: OAuth | null = null
 
 function getOAuthClient() {
-    // 检查是否在构建环境中（根据项目规范，不使用 typeof window）
-    // 使用显式环境变量来判断是否为构建时
-    const isBuildTime = process.env.__NEXT_BUILDER || (process.env.NODE_ENV === 'production' && !process.env.__NEXT_RUNTIME);
-    if (isBuildTime) {
+    // 检查是否在构建环境中
+    const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+    const isStaticGeneration = typeof window === 'undefined' && !process.env.__NEXT_RUNTIME && process.env.NODE_ENV === 'production';
+    
+    if (isBuildPhase || isStaticGeneration) {
         console.log(" [WeChat Auth] 构建时跳过 WeChat OAuth 初始化");
         return null;
     }
