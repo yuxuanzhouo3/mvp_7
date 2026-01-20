@@ -11,65 +11,85 @@ let db: any = null
 let auth: any = null
 let MySQLdb: any = null
 
+// 检查是否在服务器端运行
+const isServer = typeof window === 'undefined';
+
 // 初始化函数（支持SSR）
 async function initCloudBase() {
     console.log('[国内用户] 使用腾讯云CloudBase数据库，开始初始化')
     if (app) return {app, db, auth} // 已初始化
 
-    // 只在浏览器端初始化，避免SSR时window undefined错误
-    if (typeof window === 'undefined') {
-        return { app: null, db: null, auth: null }
+    // 检查是否在服务器端运行
+    if (isServer) {
+        // 服务器端使用 Node.js SDK
+        try {
+            const cloudbaseNode = await import('@cloudbase/node-sdk')
+            
+            const envId = process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID
+            const secretId = process.env.CLOUDBASE_SECRET_ID
+            const secretKey = process.env.CLOUDBASE_SECRET_KEY
+            
+            if (!envId || !secretId || !secretKey) {
+                console.warn('❌ [CloudBase Client] 服务器端缺少必要的环境变量')
+                return { app: null, db: null, auth: null }
+            }
+            
+            app = cloudbaseNode.default.init({
+                env: envId,
+                secretId,
+                secretKey,
+                region: 'ap-shanghai',
+            })
+        } catch (error) {
+            console.error('❌ [CloudBase Client] 服务器端 SDK 加载失败:', error)
+            return { app: null, db: null, auth: null }
+        }
+    } else {
+        // 客户端使用浏览器 SDK
+        const envId = process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID || ''
+        const accessKey = process.env.VITE_CLOUDBASE_ACCESS_KEY || ''
+        
+        if (!envId) {
+            console.error('❌ [CloudBase Client] 客户端缺少 NEXT_PUBLIC_WECHAT_CLOUDBASE_ID 环境变量')
+            return { app: null, db: null, auth: null }
+        }
+        
+        try {
+            app = cloudbase.init({
+                env: envId,
+                region: 'ap-shanghai',
+                accessKey,
+            })
+        } catch (error) {
+            console.error('❌ [CloudBase Client] 客户端 SDK 初始化失败:', error)
+            return { app: null, db: null, auth: null }
+        }
     }
 
     try {
-        const envId = process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID || ''
-
-        // 检查是否在服务器端运行
-        // const isServer = typeof window === 'undefined'
-        //
-        // if (isServer) {
-        //   // 服务器端使用 Node.js SDK
-        //   const cloudbaseNode = await import('@cloudbase/node-sdk')
-        //   app = cloudbaseNode.default.init({
-        //     env: envId,
-        //     secretId: process.env.CLOUDBASE_SECRET_ID,
-        //     secretKey: process.env.CLOUDBASE_SECRET_KEY,
-        //     region: 'ap-shanghai',
-        //   })
-        // } else {
-        // 客户端使用浏览器 SDK
-        app = cloudbase.init({
-            env: envId,
-            region: 'ap-shanghai',
-            accessKey: process.env.VITE_CLOUDBASE_ACCESS_KEY || '',
-        })
-        // }
-
         auth = app.auth()
         db = app.database()
         MySQLdb = app.rdb()
 
-        console.log('✅ [CloudBase] 初始化成功:', envId)
+        console.log('✅ [CloudBase] 初始化成功:', process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID)
     } catch (error) {
-        console.error('❌ [CloudBase] 初始化失败:', error)
+        console.error('❌ [CloudBase] 获取数据库实例失败:', error)
+        return { app: null, db: null, auth: null }
     }
 
     return {app, db, MySQLdb, auth}
 }
 
-// 浏览器端立即初始化
-if (typeof window !== 'undefined') {
-    initCloudBase()
-}
+// 注意：不再在模块级别立即初始化，避免SSR错误
 
 // 导出实例
 export { db, auth, MySQLdb }
 export default app
 
 // 辅助函数：获取集合引用
-export function getCollection(collectionName: string) {
+export async function getCollection(collectionName: string) {
     if (!db) {
-        initCloudBase()
+        await initCloudBase()
     }
     return db?.collection(collectionName)
 }

@@ -124,7 +124,7 @@ export function validateAndReportConfig(): void {
     // 根据运行时配置注入规范，构建时不应包含任何敏感配置
     // 所以在构建阶段（静态生成期间）不抛出错误，仅在运行时抛出
     if (process.env.NODE_ENV === 'production' && !(isBuildPhase || isStaticGeneration)) {
-      throw new Error(`缺少必需的环境变量: ${result.missingVariables.join(', ')}`);
+      console.warn(`运行时缺少必需的环境变量: ${result.missingVariables.join(', ')}`);
     }
   }
 }

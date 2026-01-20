@@ -3,33 +3,62 @@ import bcrypt from "bcryptjs";
 import * as jwt from "jsonwebtoken";
 import { createRefreshToken } from "@/lib/auth/refresh-token-manager";
 
+// 检查是否在服务器端运行
+const isServer = typeof window === 'undefined';
+
 let cachedApp: any = null;
 
 function initCloudBase() {
     if (cachedApp) {
         return cachedApp;
     }
-    
+
     // 在构建环境中，process.env.NEXT_PHASE 可能为 'phase-production-build'
     // 使用多种方法检测是否为构建时
+    console.log('使用腾讯云CloudBase数据库，环境配置数据：', process.env.NEXT_PHASE, process.env.NODE_ENV, "RUNTIME:", process.env.__NEXT_RUNTIME)
     const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
     const isStaticGeneration = typeof window === 'undefined' && !process.env.__NEXT_RUNTIME && process.env.NODE_ENV === 'production';
-    
+
     if (isBuildPhase || isStaticGeneration) {
         console.log(" [CloudBase Service] 构建时跳过 CloudBase 初始化");
         return null;
     }
 
-    console.log(" [CloudBase Service] 初始化 CloudBase", process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID,
-        process.env.CLOUDBASE_SECRET_ID, process.env.CLOUDBASE_SECRET_KEY);
-    cachedApp = cloudbase.init({
-        env: process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID || "",
-        secretId: process.env.CLOUDBASE_SECRET_ID || "",
-        secretKey: process.env.CLOUDBASE_SECRET_KEY || "",
-    });
+    // 确保只在服务器端运行时初始化
+    if (!isServer) {
+        console.log(" [CloudBase Service] 客户端环境，跳过 CloudBase Node SDK 初始化");
+        return null;
+    }
 
+    // 检查必需的环境变量
+    const envId = process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID;
+    const secretId = process.env.CLOUDBASE_SECRET_ID;
+    const secretKey = process.env.CLOUDBASE_SECRET_KEY;
 
-    return cachedApp;
+    if (!envId || !secretId || !secretKey) {
+        console.warn(" [CloudBase Service] 缺少必要的环境变量，跳过初始化");
+        console.warn(" [CloudBase Service] 缺失变量:", {
+            NEXT_PUBLIC_WECHAT_CLOUDBASE_ID: !envId,
+            CLOUDBASE_SECRET_ID: !secretId,
+            CLOUDBASE_SECRET_KEY: !secretKey
+        });
+        return null;
+    }
+
+    console.log(" [CloudBase Service] 初始化 CloudBase", envId, secretId, "***SECRET_KEY_HIDDEN***");
+
+    try {
+        cachedApp = cloudbase.init({
+            env: envId,
+            secretId: secretId,
+            secretKey: secretKey,
+        });
+
+        return cachedApp;
+    } catch (error) {
+        console.error(" [CloudBase Service] 初始化失败:", error);
+        return null;
+    }
 }
 
 interface CloudBaseUser {
@@ -296,7 +325,7 @@ export async function signupUser(
 export function getDatabase() {
     const app = initCloudBase();
     if (!app) {
-        throw new Error('CloudBase 未初始化，可能处于构建环境中，请确保在运行时提供正确的环境变量');
+        throw new Error('CloudBase 未初始化，可能由于环境变量缺失或处于构建环境中');
     }
     return app.database();
 }

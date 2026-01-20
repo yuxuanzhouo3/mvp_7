@@ -56,7 +56,13 @@ async function cloudbaseEmailAuth(email: string, password: string, mode: 'login'
         console.log('[国内用户] 使用腾讯云CloudBase数据库')
 
         // 动态获取数据库连接（在函数执行时才初始化，避免构建时错误）
-        const db = getDatabase();
+        let db;
+        try {
+            db = getDatabase();
+        } catch (error) {
+            console.error('获取CloudBase数据库实例失败:', error);
+            return { error: '数据库连接失败，请稍后重试' };
+        }
 
         if (mode === 'signup') {
             // 检查邮箱是否已存在
@@ -92,8 +98,15 @@ async function cloudbaseEmailAuth(email: string, password: string, mode: 'login'
             }
         } else {
             // 登录：查找用户
-            const db = getDatabase(); // 确保在登录分支中也获取数据库连接
-            const userResult = await db.collection('web_users').where({ email }).get()
+            let loginDb;
+            try {
+                loginDb = getDatabase();
+            } catch (error) {
+                console.error('登录时获取CloudBase数据库实例失败:', error);
+                return { error: '数据库连接失败，请稍后重试' };
+            }
+            
+            const userResult = await loginDb.collection('web_users').where({ email }).get()
             console.log('用户数据:', userResult.data)
             if (!userResult.data || userResult.data.length === 0) {
                 return { error: '用户不存在或密码错误' }
