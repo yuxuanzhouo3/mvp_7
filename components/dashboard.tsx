@@ -977,47 +977,15 @@ export function Dashboard() {
                               {/**/}
                               <button
                                   onClick={async () => {
-                                    try {
-                                      // Supabase 登出处理
-                                      if (process.env.NEXT_PUBLIC_GOOGLESIGIN) {
-                                        await getSupabaseClient().auth.signOut();
-                                      }
-                                      
-                                      // CloudBase 登出处理
-                                      if (process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID) {
-                                        try {
-                                          const { auth } = await import('@/lib/database/cloudbase-client');
-                                          if (auth && auth.signOut) {
-                                            await auth.signOut();
-                                          }
-                                        } catch (error) {
-                                          console.error('CloudBase 登出失败:', error);
-                                        }
-                                      }
-                                      
-                                      // 清除本地用户状态
                                       setUser(null);
                                       localStorage.removeItem('user');
                                       localStorage.removeItem('app-auth-state');
                                       sessionStorage.removeItem('user');
-                                      
+
                                       const profileDropdown = document.getElementById('profile-dropdown');
                                       if (profileDropdown) {
                                         profileDropdown.classList.add('hidden');
                                       }
-                                    } catch (error) {
-                                      console.error('登出过程出现错误:', error);
-                                      // 即使出现错误也清除本地状态
-                                      setUser(null);
-                                      localStorage.removeItem('user');
-                                      localStorage.removeItem('app-auth-state');
-                                      sessionStorage.removeItem('user');
-                                      
-                                      const profileDropdown = document.getElementById('profile-dropdown');
-                                      if (profileDropdown) {
-                                        profileDropdown.classList.add('hidden');
-                                      }
-                                    }
                                   }}
                                   className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
                               >
