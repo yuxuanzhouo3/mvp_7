@@ -9,13 +9,13 @@ function initCloudBase() {
     if (cachedApp) {
         return cachedApp;
     }
-    
+
     // 检查是否在构建环境中（构建时跳过初始化以避免错误）
-    const isBuildTime = typeof window === "undefined" && process.env.NODE_ENV === 'production' && !process.env.__NEXT_RUNTIME;
-    if (isBuildTime) {
-        console.log(" [CloudBase Service] 构建时跳过 CloudBase 初始化");
-        return null;
-    }
+    // const isBuildTime = typeof window === "undefined" && process.env.NODE_ENV === 'production' && !process.env.__NEXT_RUNTIME;
+    // if (isBuildTime) {
+    //     console.log(" [CloudBase Service] 构建时跳过 CloudBase 初始化");
+    //     return null;
+    // }
 
     console.log(" [CloudBase Service] 初始化 CloudBase", process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID,
         process.env.CLOUDBASE_SECRET_ID, process.env.CLOUDBASE_SECRET_KEY);
