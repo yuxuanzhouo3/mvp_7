@@ -274,9 +274,20 @@ export function Dashboard() {
   })
 
   useEffect(() => {
-    const user = sessionStorage.getItem("user")
+    let user = sessionStorage.getItem("user")
     console.log("user", user)
-    user && setUser(user) //JSON.parse(user))
+    const urlParams = new URLSearchParams(window.location.search);
+
+// 获取各个参数值
+    const wechatLogin = urlParams.get('wechat_login'); // 'success'
+    const token = urlParams.get('token');
+    const userStr = urlParams.get('user'); // 需要解码的JSON字符串
+
+// 解析用户信息
+    if (userStr) {
+      const userInfo = JSON.parse(decodeURIComponent(userStr));
+      setUser(userInfo); // userInfo 包含 id, name, avatar, pro, region, loginType 等信息
+    }
 
   }, [])
 
@@ -697,7 +708,7 @@ export function Dashboard() {
       // });
       // 首先注册用户
       const response = await fetch(
-          `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/auth/email`,
+          '/api/auth/email',
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

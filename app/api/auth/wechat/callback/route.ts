@@ -131,20 +131,18 @@ export async function GET(req: NextRequest) {
             // ✅ 动态设置 Token 有效期：普通用户 30 天，高级会员 90 天（多端持久化优化）
             const expiresIn = isPro ? '90d' : '30d'
 
-            sessionStorage.setItem('user', JSON.stringify(tokenPayload))
-
-            // const token = jwt.sign(
-            //     tokenPayload,
-            //     process.env.JWT_SECRET || 'fallback-secret-key-for-development-only',
-            //     { expiresIn: expiresIn }
-            // )
+            const token = jwt.sign(
+                tokenPayload,
+                process.env.JWT_SECRET || 'fallback-secret-key-for-development-only',
+                { expiresIn: expiresIn }
+            )
 
             console.log('✅ [JWT Token Generated]: For WeChat user', userInfo.nickname)
 
             // 重定向回首页，并传递登录信息
             const redirectUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL!)
             redirectUrl.searchParams.set('wechat_login', 'success')
-            redirectUrl.searchParams.set('token', 'token123')
+            redirectUrl.searchParams.set('token', token)
             redirectUrl.searchParams.set('user', encodeURIComponent(JSON.stringify({
                 id: userId,
                 name: userInfo.nickname,
