@@ -10,13 +10,8 @@ function createServerClient() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-    return createClient(supabaseUrl, supabaseAnonKey, {
-        auth: {
-            autoRefreshToken: false,
-            persistSession: false,
-            detectSessionInUrl: false
-        }
-    })
+    console.log('[Supabase] 使用Supabase客户端配置-->> supabaseUrl：', supabaseUrl, 'supabaseAnonKey', supabaseAnonKey)
+    return createClient(supabaseUrl, supabaseAnonKey)
 }
 
 /**
@@ -105,7 +100,7 @@ async function cloudbaseEmailAuth(email: string, password: string, mode: 'login'
                 console.error('登录时获取CloudBase数据库实例失败:', error);
                 return { error: '数据库连接失败，请稍后重试' };
             }
-            
+
             const userResult = await loginDb.collection('web_users').where({ email }).get()
             console.log('用户数据:', userResult.data)
             if (!userResult.data || userResult.data.length === 0) {

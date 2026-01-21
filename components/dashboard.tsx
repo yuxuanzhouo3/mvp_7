@@ -273,8 +273,13 @@ export function Dashboard() {
     return matchesCategory && matchesSearch
   })
 
+  // 检测部署区域
+  const isChinaRegion =
+      process.env.NEXT_PUBLIC_DEPLOYMENT_REGION === 'CN' ||
+      process.env.NEXT_PUBLIC_DEPLOYMENT_REGION !== 'INTL';
+
   useEffect(() => {
-    let user = sessionStorage.getItem("user")
+    let user = localStorage.getItem("user")
     console.log("user", user)
     const urlParams = new URLSearchParams(window.location.search);
 
@@ -286,7 +291,10 @@ export function Dashboard() {
 // 解析用户信息
     if (userStr) {
       const userInfo = JSON.parse(decodeURIComponent(userStr));
+      localStorage.setItem("user", JSON.stringify(userInfo));
       setUser(userInfo); // userInfo 包含 id, name, avatar, pro, region, loginType 等信息
+    } else {
+      user && setUser(JSON.parse(user))
     }
 
   }, [])
@@ -363,7 +371,7 @@ export function Dashboard() {
 
       // Update user credits
       const newCredits = user.credits + creditAmount
-      if (process.env.NEXT_PUBLIC_GOOGLESIGIN) {
+      if (!isChinaRegion) {
         const {data, error} = await getSupabaseClient()
             .from('user')
             .update({credits: newCredits})
@@ -417,7 +425,7 @@ export function Dashboard() {
       const expiresAt = new Date()
       expiresAt.setMonth(expiresAt.getMonth() + (billingCycle === 'monthly' ? 1 : 12))
 
-      if (process.env.NEXT_PUBLIC_GOOGLESIGIN) {
+      if (!isChinaRegion) {
         // Update user subscription
         const {error} = await getSupabaseClient()
             .from('users')
@@ -670,42 +678,16 @@ export function Dashboard() {
 
   // 添加用户注册函数
   const registerUser = async (email: string, password: string, username: string, fullName: string) => {
-    //验证密码规范
-    console.log('password:', password)
-    const passwordValidation = passwordSecurity.validatePassword(password);
-    console.log('passwordValidation:', passwordValidation)
-    if (!passwordValidation.isValid) {
-      return { success: false, error: passwordValidation.feedback}
-      //     {
-      //       success: false,
-      //       error: t.auth.weakPassword,
-      //       code: "WEAK_PASSWORD",
-      //       passwordStrength: {
-      //         score: passwordValidation.score,
-      //         isValid: passwordValidation.isValid,
-      //         feedback: passwordValidation.feedback,
-      //         suggestions: passwordValidation.suggestions,
-      //       },
-      //     },
-      //     {status: 400}
-      // );
+    if (!isChinaRegion) {
+      //国外验证密码规范
+      console.log('password:', password)
+      const passwordValidation = passwordSecurity.validatePassword(password);
+      console.log('passwordValidation:', passwordValidation)
+      if (!passwordValidation.isValid) {
+        return { success: false, error: passwordValidation.feedback}
+      }
     }
     try {
-
-      // register(email, password).then(async (result) => {
-      //   if (!result.success){
-      //     return {success: false, error: result.message}
-      //   }
-      //   return {success: true,
-      //     user: {
-      //       id: result.data.id,
-      //     email: result.data.email || email,
-      //     name: email.split('@')[0],
-      //     pro: false,
-      //     region: 'overseas'
-      //   }
-      // }
-      // });
       // 首先注册用户
       const response = await fetch(
           '/api/auth/email',
@@ -1221,7 +1203,7 @@ export function Dashboard() {
                   </div>
 
                   {/* Google Sign In */}
-                  {process.env.NEXT_PUBLIC_GOOGLESIGIN && ( <button
+                  {!isChinaRegion && ( <button
                       type="button"
                       onClick={async () => {
                         try {
@@ -1250,15 +1232,14 @@ export function Dashboard() {
                     <span>{t.auth.continueWithGoogle}</span>
                   </button>)}
 
-                  {!process.env.NEXT_PUBLIC_GOOGLESIGIN && ( <button
+                  {isChinaRegion && ( <button
                       type="button"
                       onClick={async () => {
                         try {
                           const result = await handleWeChatLogin();
-                          // 谷歌登录跳转成功，关闭模态框
+                          // 微信登录跳转成功，关闭模态框
                           setShowLoginModal(false);
                           // setUser(result.data);
-                          // 登录失败，已在signInWithGoogle函数中处理错误提示
                         } catch (error) {
                           console.error('微信登录异常:', error);
                           alert('微信登录过程中发生异常');
@@ -1298,7 +1279,7 @@ export function Dashboard() {
                                 setShowLoginModal(false);
                                 // @ts-ignore
                                 setUser(result.user);
-                                sessionStorage.setItem('user', JSON.stringify(result.user));
+                                localStorage.setItem('user', JSON.stringify(result.user));
                               } else {
                                 // 登录失败逻辑
                                 alert(result.error || 'Login failed');
@@ -1563,9 +1544,10 @@ export function Dashboard() {
                                 : 'bg-gray-200 dark:bg-gray-700'
                         }`}
                     >
-                      {t.payment.year} ({t.payment.savePercent} {t.payment.month})
+                      {t.payment.year} ({t.payment.savePercent} 20)
                     </button>
                   </div>
+
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1603,12 +1585,7 @@ export function Dashboard() {
                               </div>
                           )}
                         </div>
-                        <button
-                            onClick={() => setShowSubscriptions(false)}
-                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
-                        >
-                          {t.common.cancel}
-                        </button>
+
                       </div>
                   ))}
                 </div>
@@ -1647,6 +1624,12 @@ export function Dashboard() {
                       </div>
                     </div>
                 )}
+                <button
+                    onClick={() => setShowSubscriptions(false)}
+                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  {t.common.cancel}
+                </button>
               </div>
             </div>
         )}
