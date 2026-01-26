@@ -37,6 +37,7 @@ export const en = {
         none: "None",
         adjustFilter: "Try adjusting your search or category filter",
         quickAccess: "Quick Access",
+        version: "Version",
     },
 
     // ==================== Header ====================

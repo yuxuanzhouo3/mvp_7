@@ -1,34 +1,27 @@
-import cloudbase from "@cloudbase/node-sdk";
 import bcrypt from "bcryptjs";
 import * as jwt from "jsonwebtoken";
 import { createRefreshToken } from "@/lib/auth/refresh-token-manager";
 
-// 检查是否在服务器端运行
-const isServer = typeof window === 'undefined';
+// 确保只在服务端运行
+if (typeof process === 'undefined' || !process?.versions?.node) {
+    throw new Error('This module should only be imported in server-side code');
+}
+
+// 检查是否在服务器端运行 - 遵循项目规范，不使用 typeof window
+const isServer = typeof process !== 'undefined' && process?.versions?.node;
 
 let cachedApp: any = null;
 
-function initCloudBase() {
+async function initCloudBase() {
     if (cachedApp) {
         return cachedApp;
     }
 
-    // 在构建环境中，process.env.NEXT_PHASE 可能为 'phase-production-build'
-    // 使用多种方法检测是否为构建时
-    // console.log('使用腾讯云CloudBase数据库，环境配置数据：', process.env.NEXT_PHASE, process.env.NODE_ENV, "RUNTIME:", process.env.__NEXT_RUNTIME)
-    // const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
-    // const isStaticGeneration = typeof window === 'undefined' && !process.env.__NEXT_RUNTIME && process.env.NODE_ENV === 'production';
-    // console.log(" [CloudBase Service] 当前运行环境:isBuildPhase:", isBuildPhase,"isStaticGeneration:",isStaticGeneration)
-    // if (isBuildPhase || isStaticGeneration) {
-    //     console.log(" [CloudBase Service] 构建时跳过 CloudBase 初始化");
-    //     return null;
-    // }
-    //
-    // // 确保只在服务器端运行时初始化
-    // if (!isServer) {
-    //     console.log(" [CloudBase Service] 客户端环境，跳过 CloudBase Node SDK 初始化");
-    //     return null;
-    // }
+    // 检查是否为服务器环境
+    if (!isServer) {
+        console.log(" [CloudBase Service] 客户端环境，跳过 CloudBase Node SDK 初始化");
+        return null;
+    }
 
     // 检查必需的环境变量
     const envId = process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID;
@@ -48,7 +41,10 @@ function initCloudBase() {
     console.log(" [CloudBase Service] 初始化 CloudBase", envId, secretId, "***SECRET_KEY_HIDDEN***");
 
     try {
-        cachedApp = cloudbase.init({
+        // 动态导入服务端 SDK
+        const cloudbase = await import("@cloudbase/node-sdk");
+        
+        cachedApp = cloudbase.default.init({
             env: envId,
             secretId: secretId,
             secretKey: secretKey,
@@ -126,7 +122,7 @@ export async function loginUser(
     try {
         console.log(" [CloudBase Service] 开始登录，邮箱:", email);
 
-        const app = initCloudBase();
+        const app = await initCloudBase(); // 使用异步初始化
         if (!app) {
             return {
                 success: false,
@@ -225,7 +221,7 @@ export async function signupUser(
     try {
         console.log(" [CloudBase Service] 开始注册，邮箱:", email);
 
-        const app = initCloudBase();
+        const app = await initCloudBase(); // 使用异步初始化
         if (!app) {
             return {
                 success: false,
@@ -322,8 +318,8 @@ export async function signupUser(
     }
 }
 
-export function getDatabase() {
-    const app = initCloudBase();
+export async function getDatabase() {
+    const app = await initCloudBase(); // 使用异步初始化
     if (!app) {
         throw new Error('CloudBase 未初始化，可能由于环境变量缺失或处于构建环境中');
     }
@@ -350,7 +346,7 @@ export async function downloadFileFromCloudBase(fileID: string): Promise<Buffer>
     try {
         console.log(" [CloudBase Service] 开始下载文件，fileID:", fileID);
 
-        const app = initCloudBase();
+        const app = await initCloudBase(); // 使用异步初始化
 
         // 验证 CloudBase 初始化
         if (!app) {
@@ -393,7 +389,7 @@ export async function cloudbaseSignUpWithEmail(
     password: string
 ): Promise<{ success: boolean; user?: CloudBaseUser; message: string; token?: string }> {
     try {
-        const app = initCloudBase()
+        const app = await initCloudBase() // 使用异步初始化
         if (!app) {
             return { success: false, message: 'CloudBase 未正确初始化，可能处于构建环境中' }
         }
@@ -455,7 +451,7 @@ export async function cloudbaseSignInWithEmail(
     password: string
 ): Promise<{ success: boolean; user?: CloudBaseUser; message: string; token?: string }> {
     try {
-        const app = initCloudBase()
+        const app = await initCloudBase() // 使用异步初始化
         if (!app) {
             return { success: false, message: 'CloudBase 未正确初始化，可能处于构建环境中' }
         }

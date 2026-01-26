@@ -67,8 +67,8 @@ export async function GET(req: NextRequest) {
 
         // 保存/更新用户信息到腾讯云数据库
         try {
-            // 动态获取数据库连接（在函数执行时才初始化，避免构建时错误）
-            const cloudbaseDB = getDatabase();
+            // 获取数据库连接
+            const cloudbaseDB = await getDatabase();
 
             // 查询是否已存在
             const existingUser = await cloudbaseDB

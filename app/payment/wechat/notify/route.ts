@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Wechatpay } from 'wechatpay-axios-plugin'
 import { createClient } from '@supabase/supabase-js'
-import { db as cloudbaseDB } from '@/lib/database/cloudbase-client'
+import { getDatabase } from '@/lib/database/cloudbase-service'
 
 // 延迟初始化 Supabase 客户端，避免在构建时初始化
 let supabaseInstance: any = null;
@@ -108,7 +108,8 @@ export async function POST(req: NextRequest) {
 
             // 尝试更新腾讯云
             try {
-                const tcbResult = await cloudbaseDB
+                const db = await getDatabase();
+                const tcbResult = await db
                     .collection('web_payment_transactions')
                     .where({
                         transaction_id: out_trade_no,
@@ -157,7 +158,8 @@ export async function POST(req: NextRequest) {
 
             // 先从腾讯云查询
             try {
-                const tcbResult = await cloudbaseDB
+                const db = await getDatabase();
+                const tcbResult = await db
                     .collection('web_payment_transactions')
                     .where({
                         transaction_id: out_trade_no,
@@ -211,8 +213,9 @@ export async function POST(req: NextRequest) {
 
                 // 先尝试腾讯云
                 try {
+                    const db = await getDatabase();
                     // 查询是否已有订阅
-                    const existingSub = await cloudbaseDB
+                    const existingSub = await db
                         .collection('web_subscriptions')
                         .where({
                             user_email: transactionRecord.user_email,
@@ -221,13 +224,13 @@ export async function POST(req: NextRequest) {
 
                     if (existingSub.data && existingSub.data.length > 0) {
                         // 更新现有订阅
-                        await cloudbaseDB
+                        await db
                             .collection('web_subscriptions')
                             .doc(existingSub.data[0]._id)
                             .update(subscriptionData)
                     } else {
                         // 创建新订阅
-                        await cloudbaseDB
+                        await db
                             .collection('web_subscriptions')
                             .add({
                                 ...subscriptionData,

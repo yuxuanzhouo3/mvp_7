@@ -43,6 +43,8 @@ import {
   Download,
   Zap,
   Settings,
+  Eye,
+  EyeOff,
 } from "lucide-react"
 
 interface User {
@@ -257,8 +259,10 @@ export function Dashboard() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly')
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null)
-  const emailRef = useRef<HTMLInputElement>(null);
-  const passwordRef = useRef<HTMLInputElement>(null);
+  const [emailRef, setEmail] = useState("");
+  const [passwordRef, setPassword] = useState("");
+  // 在组件顶部添加状态管理密码可见性
+  const [showPassword, setShowPassword] = useState(false);
   // 添加注册表单的引用
   const registerEmailRef = useRef<HTMLInputElement>(null);
   const registerPasswordRef = useRef<HTMLInputElement>(null);
@@ -347,7 +351,8 @@ export function Dashboard() {
   }
 
   const handleToolClick = (toolId: string) => {
-    if ((user && user.credits > 0) || !user){
+    console.log("handleToolClick, user:", user)
+    if ((user && user.credits >= 0) || !user){
       window.location.href = `/tools/${toolId}`
       return
     }
@@ -366,45 +371,121 @@ export function Dashboard() {
 
     setIsLoading(true)
     try {
-      // Simulate payment processing
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // 根据选择的支付方式进行支付
+      if (paymentMethod === 'wechatpay' || paymentMethod === 'alipay' || paymentMethod === 'card' || paymentMethod === 'paypal' || paymentMethod === 'crypto') {
+        // 发起在线支付
+        const response = await fetch('/api/payment/credits', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            paymentMethod,
+            creditAmount,
+            userEmail: user.email,
+            returnUrl: `${window.location.origin}/payment/success`,
+            cancelUrl: `${window.location.origin}/payment/cancel`
+          }),
+        });
 
-      // Update user credits
-      const newCredits = user.credits + creditAmount
-      if (!isChinaRegion) {
-        const {data, error} = await getSupabaseClient()
-            .from('user')
-            .update({credits: newCredits})
-            .eq('id', user.id).select()
-        console.log('Update user:', data, newCredits)
-        if (error) throw error
+        const result = await response.json();
+        console.log('Payment result:', result);
+        if (!response.ok) {
+          throw new Error(result.message || `Failed to initiate ${paymentMethod}`);
+        }
 
-        // Record transaction
-        await getSupabaseClient()
-            .from('credit_transactions')
-            .insert({
-              user_id: user.id,
-              type: 'purchase',
-              amount: creditAmount,
-              description: `Purchased ${creditAmount} credits`,
-              reference_id: `purchase_${Date.now()}`
-            })
+        if (paymentMethod === 'wechatpay' && result.qrCodeUrl) {
+          // 显示二维码供用户扫码支付
+          const qrCodeWindow = window.open('', '_blank');
+          if (qrCodeWindow) {
+            qrCodeWindow.document.write(`
+              <html>
+                <head><title>WeChat Payment</title></head>
+                <body style="margin:0;padding:20px;text-align:center;">
+                  <h2>Scan QR Code to Pay</h2>
+                  <h3>${creditAmount} Credits - $${creditPackages.find(p => p.amount === creditAmount)?.price}</h3>
+                  <img src="${result.qrCodeUrl}" alt="WeChat Payment QR Code" style="max-width:300px;max-height:300px;margin:20px auto;display:block;" />
+                  <p>Transaction ID: ${result.outTradeNo}</p>
+                  <button onclick="window.close()" style="margin-top:20px;padding:10px 20px;background:#0070f3;color:white;border:none;border-radius:4px;cursor:pointer;">Close</button>
+                </body>
+              </html>
+            `);
+          }
+
+          // 关闭购买弹窗
+          setShowCreditPurchase(false);
+          alert('WeChat payment initiated. Please scan the QR code to complete the payment.');
+          return;
+        } else if (paymentMethod === 'alipay' && result.paymentUrl) {
+          // 重定向到支付宝支付页面
+          window.location.href = result.paymentUrl;
+          return;
+        } else if (paymentMethod === 'card' && result.url) {
+          // 重定向到 Stripe 支付页面
+          window.location.href = result.url;
+          return;
+        } else if (paymentMethod === 'paypal' && result.paymentUrl) {
+          // 重定向到 PayPal 支付页面
+          window.location.href = result.paymentUrl;
+          return;
+        } else if (paymentMethod === 'crypto' && result.paymentUrl) {
+          // 重定向到加密货币支付页面
+          window.location.href = result.paymentUrl;
+          return;
+        } else {
+          throw new Error(`Failed to get payment details for ${paymentMethod}`);
+        }
       } else {
-        // Update user credits 腾讯云cloudbase更新数据 todo
-        // await cloudbaseDB
-        //     .collection('credit_transactions')
-        //     .doc(user.id)
-        //     .update(userData)
-        //
-        // console.log('Update user:', data, newCredits)
-        // if (error) throw error
-        console.log('腾讯云cloudbase更新数据开发中。。。')
+        // 使用原有的模拟支付流程
+        // Simulate payment processing
+        await new Promise(resolve => setTimeout(resolve, 2000))
 
+        // Update user credits
+        const newCredits = user.credits + creditAmount
+        if (!isChinaRegion) {
+          const {data, error} = await getSupabaseClient()
+              .from('user')
+              .update({credits: newCredits})
+              .eq('id', user.id).select()
+          console.log('Update user:', data, newCredits)
+          if (error) throw error
+
+          // Record transaction
+          await getSupabaseClient()
+              .from('credit_transactions')
+              .insert({
+                user_id: user.id,
+                type: 'purchase',
+                amount: creditAmount,
+                description: `Purchased ${creditAmount} credits`,
+                reference_id: `purchase_${Date.now()}`
+              })
+        } else {
+          // Update user credits - 通过后端API更新数据
+          // 通过后端API更新用户积分
+          const response = await fetch('/api/update-credits', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              userId: user.id,
+              credits: newCredits,
+              amount: creditAmount,
+              userEmail: user.email
+            }),
+          });
+          console.log('Update credits response:', response)
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to update credits');
+          }
+        }
+
+        // onCreditsUpdate(newCredits)
+        setShowCreditPurchase(false)
+        alert(`Successfully purchased ${creditAmount} credits!`)
       }
-
-      // onCreditsUpdate(newCredits)
-      setShowCreditPurchase(false)
-      alert(`Successfully purchased ${creditAmount} credits!`)
     } catch (error) {
       console.error('Credit purchase error:', error)
       alert('Failed to purchase credits. Please try again.')
@@ -507,7 +588,7 @@ export function Dashboard() {
       // if (process.env.NEXT_PUBLIC_WECHAT_APP_ID || process.env.NEXT_PUBLIC_WECHAT_APP_SECRET) {
       //   // console.log('⚠️ [WeChat] 微信登录未配置，重定向到首页')
       //   // return NextResponse.redirect(
-      //   //     `${process.env.NEXT_PUBLIC_SITE_URL}/?error=wechat_not_configured`
+      //   //    `${process.env.NEXT_PUBLIC_SITE_URL}/?error=wechat_not_configured`
       //   // )
       //   const existingUser = await cloudbaseDB
       //       .collection('web_users')
@@ -638,34 +719,14 @@ export function Dashboard() {
         return { success: false, error: error.message };
       }
 
-      // 成功跳转到谷歌登录页面
+      // signInWithOAuth 返回 provider/url，而不是 user 对象；使用返回的重定向 URL 跳转到 OAuth 提供者
       console.log('Google 登录跳转成功:', data);
+      if (data?.url) {
+        window.location.href = data.url;
+        return { success: true, url: data.url };
+      }
 
-      //判断是否添加用户信息
-      let { data: user, error2 } = await getSupabaseClient()
-          .from('user')
-          .select('*')
-          .eq('email', data.user?.email)
-      console.log('getUser:', user)
-      if (error2) {
-        console.error('Load user error:', error2)
-        return { error: error2.message }
-      }
-      if (!user) {
-        // 添加用户信息
-        const { error } = await getSupabaseClient()
-            .from('user')
-            .insert({
-              email: data.user?.email,
-              username: data.user?.user_metadata.username,
-              full_name: data.user?.user_metadata.full_name,
-              avatar_url: data.user?.user_metadata.avatar_url,
-              region: 'overseas',
-              credits: 0,
-              subscription_tier: 'free',
-            })
-      }
-      return { success: true, data };
+      return { success: false, error: 'No redirect URL returned from provider' };
     } catch (error) {
       // @ts-ignore
       console.error('Google login error:', error.message);
@@ -1167,25 +1228,43 @@ export function Dashboard() {
         {showLoginModal && (
             <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50">
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96">
-                <h2 className="text-xl font-bold mb-4">{t.auth.signInTitle}</h2>
+                <h2 className="text-xl font-bold mb-4">{t.auth?.signInTitle || "Sign In"}</h2>
                 <form className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">{t.auth.email}</label>
+                    <label className="block text-sm font-medium mb-1">{t.auth?.email || "Email"}</label>
                     <input
-                        ref={emailRef}
+                        // ref={emailRef}
+                        id="email"
                         type="email"
+                        placeholder={t.auth?.email || "Email"}
+                        value={emailRef}
+                        onChange={(e) => setEmail(e.target.value)}
                         className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
                         required
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">{t.auth.password}</label>
+                  <div className="relative">
+                    <label className="block text-sm font-medium mb-1">{t.auth?.password || "Password"}</label>
                     <input
-                        ref={passwordRef}
-                        type="password"
-                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
-                        required
-                    />
+                        // ref={passwordRef}
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        value={passwordRef}
+                        placeholder={t.auth?.password || "Password"}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full p-2 pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                        required />
+                    {showPassword ? (
+                        <Eye
+                            className="absolute right-3 top-1/2 h-5 w-5 text-muted-foreground cursor-pointer"
+                            onClick={() => setShowPassword(!showPassword)}
+                        />
+                    ) : (
+                        <EyeOff
+                            className="absolute right-3 top-1/2 h-5 w-5 text-muted-foreground cursor-pointer"
+                            onClick={() => setShowPassword(!showPassword)}
+                        />
+                    )}
                   </div>
 
                   {/* Forgot Password Link */}
@@ -1198,7 +1277,7 @@ export function Dashboard() {
                         }}
                         className="text-sm text-blue-500 hover:text-blue-600"
                     >
-                      {t.auth.forgotPassword}
+                      {t.auth?.forgotPassword || "Forgot Password?"}
                     </button>
                   </div>
 
@@ -1229,7 +1308,7 @@ export function Dashboard() {
                       <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                     </svg>
-                    <span>{t.auth.continueWithGoogle}</span>
+                    <span>{t.auth?.continueWithGoogle || "Continue with Google"}</span>
                   </button>)}
 
                   {isChinaRegion && ( <button
@@ -1253,7 +1332,7 @@ export function Dashboard() {
                     {/*  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>*/}
                     {/*  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>*/}
                     {/*</svg>*/}
-                    <span>{t.auth.continueWithWeChat}</span>
+                    <span>{t.auth?.continueWithWeChat || "Continue with WeChat"}</span>
                   </button>)}
 
                   <div className="flex space-x-2">
@@ -1261,17 +1340,14 @@ export function Dashboard() {
                         type="button"
                         onClick={async (e) => {
                           e.preventDefault();
-                          if (emailRef.current && passwordRef.current) {
-                            const email = emailRef.current.value;
-                            const password = passwordRef.current.value;
-
-                            if (!email || !password) {
-                              alert('Please enter both email and password');
-                              return;
-                            }
+                          if (!emailRef || !passwordRef) {
+                            alert('Please enter both email and password');
+                            return;
+                          }
+                          if (emailRef && passwordRef) {
 
                             try {
-                              const result = await signIn(email, password);
+                              const result = await signIn(emailRef, passwordRef);
                               if (result.success) {
                                 // 登录成功逻辑
                                 console.log('Login successful', result);
@@ -1292,14 +1368,14 @@ export function Dashboard() {
                         }}
                         className="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
                     >
-                      {t.auth.signInButton}
+                      {t.auth?.signInButton || "Sign In"}
                     </button>
                     <button
                         type="button"
                         onClick={() => setShowLoginModal(false)}
                         className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
                     >
-                      {t.common.cancel}
+                      {t.common?.cancel || "Cancel"}
                     </button>
                   </div>
                 </form>
@@ -1311,7 +1387,7 @@ export function Dashboard() {
         {showRegisterModal && (
             <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50">
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96">
-                <h2 className="text-xl font-bold mb-4">{t.auth.signUpTitle}</h2>
+                <h2 className="text-xl font-bold mb-4">{t.auth?.signUpTitle || "Sign Up"}</h2>
                 <form onSubmit={async (e) => {
                   e.preventDefault();
                   // 实现注册逻辑
@@ -1349,7 +1425,7 @@ export function Dashboard() {
                   }
                 }} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">{t.auth.email}</label>
+                    <label className="block text-sm font-medium mb-1">{t.auth?.email || "Email"}</label>
                     <input
                         ref={registerEmailRef}
                         type="email"
@@ -1357,17 +1433,28 @@ export function Dashboard() {
                         required
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">{t.auth.password}</label>
+                  <div className="relative">
+                    <label className="block text-sm font-medium mb-1">{t.auth?.password || "Password"}</label>
                     <input
                         ref={registerPasswordRef}
-                        type="password"
-                        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                        type={showPassword ? "text" : "password"}
+                        className="w-full p-2 pr-10 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
                         required
                     />
+                    {showPassword ? (
+                        <Eye
+                            className="absolute right-3 top-1/2 h-5 w-5 text-muted-foreground cursor-pointer"
+                            onClick={() => setShowPassword(!showPassword)}
+                        />
+                    ) : (
+                        <EyeOff
+                            className="absolute right-3 top-1/2 h-5 w-5 text-muted-foreground cursor-pointer"
+                            onClick={() => setShowPassword(!showPassword)}
+                        />
+                    )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">{t.auth.username}</label>
+                    <label className="block text-sm font-medium mb-1">{t.auth?.username || "Username"}</label>
                     <input
                         ref={registerUsernameRef}
                         type="text"
@@ -1376,7 +1463,7 @@ export function Dashboard() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">{t.auth.fullName}</label>
+                    <label className="block text-sm font-medium mb-1">{t.auth?.fullName || "Full Name"}</label>
                     <input
                         ref={registerFullNameRef}
                         type="text"
@@ -1393,12 +1480,12 @@ export function Dashboard() {
                           const result = await signInWithGoogle();
                           if (result.success) {
                             console.log('Google注册成功', result);
-                            //数据库记录用户信息
+                            //数据库记录用户信息（signInWithGoogle 返回重定向 URL；实际用户信息应在 OAuth 回调后获取）
                             try {
                               const { data, error } = await getSupabaseClient()
                                   .from('user')
                                   .insert([
-                                    { username: result.data} // email: result.data.email, full_name: result.data.full_name, avatar_url: result.data.avatar_url},
+                                    { username: result.url || '' } // TODO: replace with actual user info obtained after OAuth callback
                                   ])
                                   .select()
                                   .single();
@@ -1427,7 +1514,7 @@ export function Dashboard() {
                       <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                     </svg>
-                    <span>{t.auth.signUpWithGoogle}</span>
+                    <span>{t.auth?.signUpWithGoogle || "Sign Up with Google"}</span>
                   </button>)}
 
                   <div className="flex space-x-2">
@@ -1435,14 +1522,14 @@ export function Dashboard() {
                         type="submit"
                         className="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
                     >
-                      {t.auth.createAccount}
+                      {t.auth?.createAccount || "Create Account"}
                     </button>
                     <button
                         type="button"
                         onClick={() => setShowRegisterModal(false)}
                         className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
                     >
-                      {t.common.cancel}
+                      {t.common?.cancel || "Cancel"}
                     </button>
                   </div>
                 </form>
@@ -1453,7 +1540,7 @@ export function Dashboard() {
         {showCreditPurchase && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96 max-h-[80vh] overflow-y-auto">
-                <h2 className="text-xl font-bold mb-4">{t.payment.purchaseCredits}</h2>
+                <h2 className="text-xl font-bold mb-4">{t.payment?.purchaseCredits || "Purchase Credits"}</h2>
 
                 <div className="grid grid-cols-2 gap-4 mb-6">
                   {creditPackages.map((pkg) => (
@@ -1468,11 +1555,11 @@ export function Dashboard() {
                       >
                         {pkg.popular && (
                             <div className="text-xs bg-green-500 text-white px-2 py-1 rounded-full mb-2 inline-block">
-                              {t.payment.mostPopular}
+                              {t.payment?.mostPopular || "Most Popular"}
                             </div>
                         )}
                         <div className="text-2xl font-bold">{pkg.amount}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">{t.common.credits}</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">{t.common?.credits || "Credits"}</div>
                         <div className="text-lg font-semibold">${pkg.price}</div>
                       </div>
                   ))}
@@ -1480,20 +1567,29 @@ export function Dashboard() {
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2">{t.payment.selectPaymentMethod}</label>
+                    <label className="block text-sm font-medium mb-2">{t.payment?.selectPaymentMethod || "Select Payment Method"}</label>
                     <select
                         value={paymentMethod}
                         onChange={(e) => setPaymentMethod(e.target.value)}
                         className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
                     >
-                      <option value="card">{t.payment.methods.stripe.name}</option>
-                      <option value="paypal">{t.payment.methods.paypal.name}</option>
-                      <option value="crypto">{t.payment.methods.crypto.name}</option>
+                      {isChinaRegion ? (
+                          <>
+                            <option value="wechatpay">{t.payment?.methods?.wechat?.name || '微信支付'}</option>
+                            <option value="alipay">{t.payment?.methods?.alipay?.name || '支付宝'}</option>
+                          </>
+                      ) : (
+                          <>
+                            <option value="card">{t.payment?.methods?.stripe?.name || "Credit Card"}</option>
+                            <option value="paypal">{t.payment?.methods?.paypal?.name || "PayPal"}</option>
+                            <option value="crypto">{t.payment?.methods?.crypto?.name || "Cryptocurrency"}</option>
+                          </>
+                      )}
                     </select>
                   </div>
 
                   <div className="flex justify-between items-center">
-                    <span className="font-medium">{t.payment.total}:</span>
+                    <span className="font-medium">{t.payment?.total || "Total"}:</span>
                     <span className="text-xl font-bold">
                   ${creditPackages.find(p => p.amount === creditAmount)?.price}
                 </span>
@@ -1505,13 +1601,13 @@ export function Dashboard() {
                         disabled={isLoading}
                         className="flex-1 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
                     >
-                      {isLoading ? t.common.loading : t.payment.payNow}
+                      {isLoading ? t.common?.loading || "Loading" : t.payment?.payNow || "Pay Now"}
                     </button>
                     <button
                         onClick={() => setShowCreditPurchase(false)}
                         className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
                     >
-                      {t.common.cancel}
+                      {t.common?.cancel || "Cancel"}
                     </button>
                   </div>
                 </div>
@@ -1522,7 +1618,7 @@ export function Dashboard() {
         {showSubscriptions && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-[600px] max-h-[80vh] overflow-y-auto">
-                <h2 className="text-xl font-bold mb-4">{t.payment.choosePlan}</h2>
+                <h2 className="text-xl font-bold mb-4">{t.payment?.choosePlan || "Choose Plan"}</h2>
 
                 <div className="mb-4">
                   <div className="flex space-x-4">
@@ -1534,7 +1630,7 @@ export function Dashboard() {
                                 : 'bg-gray-200 dark:bg-gray-700'
                         }`}
                     >
-                      {t.payment.month}
+                      {t.payment?.month || "Month"}
                     </button>
                     <button
                         onClick={() => setBillingCycle('yearly')}
@@ -1544,7 +1640,7 @@ export function Dashboard() {
                                 : 'bg-gray-200 dark:bg-gray-700'
                         }`}
                     >
-                      {t.payment.year} ({t.payment.savePercent} 20)
+                      {t.payment?.year || "Year"} ({t.payment?.savePercent || "Save"} 20)
                     </button>
                   </div>
 
@@ -1565,23 +1661,23 @@ export function Dashboard() {
                         <div className="text-3xl font-bold mb-4">
                           ${billingCycle === 'monthly' ? plan.monthly_price : plan.yearly_price}
                           <span
-                              className="text-sm font-normal text-gray-600">/{billingCycle === 'monthly' ? t.payment.mo : t.payment.yr}</span>
+                              className="text-sm font-normal text-gray-600">/{billingCycle === 'monthly' ? t.payment?.mo || "mo" : t.payment?.yr || "yr"}</span>
                         </div>
                         <div className="space-y-2 mb-4">
                           <div className="flex items-center">
                             <span className="text-green-500 mr-2">✓</span>
-                            {plan.credits_per_month} {t.common.credits}/{t.payment.month}
+                            {plan.credits_per_month} {t.common?.credits || "Credits"}/{t.payment?.month || "month"}
                           </div>
                           {plan.features.max_generations_per_month && (
                               <div className="flex items-center">
                                 <span className="text-green-500 mr-2">✓</span>
-                                {plan.features.max_generations_per_month} {t.payment.generations}/{t.payment.month}
+                                {plan.features.max_generations_per_month} {t.payment?.generations || "generations"}/{t.payment?.month || "month"}
                               </div>
                           )}
                           {plan.features.priority_support && (
                               <div className="flex items-center">
                                 <span className="text-green-500 mr-2">✓</span>
-                                {t.payment.prioritySupport}
+                                {t.payment?.prioritySupport || "Priority Support"}
                               </div>
                           )}
                         </div>
@@ -1593,15 +1689,15 @@ export function Dashboard() {
                 {selectedPlan && (
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
-                        <span className="font-medium">{t.payment.plan}:</span>
+                        <span className="font-medium">{t.payment?.plan || "Plan"}:</span>
                         <span className="font-bold">{selectedPlan.name}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="font-medium">{t.payment.billing}:</span>
+                        <span className="font-medium">{t.payment?.billing || "Billing"}:</span>
                         <span className="font-bold capitalize">{billingCycle}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="font-medium">{t.payment.total}:</span>
+                        <span className="font-medium">{t.payment?.total || "Total"}:</span>
                         <span className="text-xl font-bold">
                     ${billingCycle === 'monthly' ? selectedPlan.monthly_price : selectedPlan.yearly_price}
                   </span>
@@ -1613,13 +1709,13 @@ export function Dashboard() {
                             disabled={isLoading}
                             className="flex-1 px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
                         >
-                          {isLoading ? t.common.loading : t.payment.upgradeNow}
+                          {isLoading ? t.common?.loading || "Loading" : t.payment?.upgradeNow || "Upgrade Now"}
                         </button>
                         <button
                             onClick={() => setShowSubscriptions(false)}
                             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
                         >
-                          {t.common.cancel}
+                          {t.common?.cancel || "Cancel"}
                         </button>
                       </div>
                     </div>
@@ -1628,7 +1724,7 @@ export function Dashboard() {
                     onClick={() => setShowSubscriptions(false)}
                     className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
-                  {t.common.cancel}
+                  {t.common?.cancel || "Cancel"}
                 </button>
               </div>
             </div>

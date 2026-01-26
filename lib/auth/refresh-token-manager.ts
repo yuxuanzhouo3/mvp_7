@@ -6,7 +6,7 @@
 
 import * as crypto from "crypto";
 import * as jwt from "jsonwebtoken";
-import { db as cloudbaseDB } from '@/lib/database/cloudbase-client'
+import { getDatabase } from '@/lib/database/cloudbase-service'
 import { RefreshTokenRecord, CLOUDBASE_COLLECTIONS } from "@/lib/database/cloudbase-schema";
 
 // 生成 UUID v4
@@ -69,7 +69,8 @@ export async function createRefreshToken(
             region: "china",
         };
 
-        const result = await cloudbaseDB
+        const db = await getDatabase();
+        const result = await db
             .collection(CLOUDBASE_COLLECTIONS.REFRESH_TOKENS)
             .add(tokenRecord);
 
@@ -129,7 +130,8 @@ export async function verifyRefreshToken(
         }
 
         // 2. 检查腾讯云中是否存在且未被撤销
-        const result = await cloudbaseDB
+        const db = await getDatabase();
+        const result = await db
             .collection(CLOUDBASE_COLLECTIONS.REFRESH_TOKENS)
             .where({
                 tokenId,
@@ -159,7 +161,8 @@ export async function verifyRefreshToken(
         }
 
         // 4. 更新最后使用时间和使用次数
-        await cloudbaseDB
+        // const db = await getDatabase();
+        await db
             .collection(CLOUDBASE_COLLECTIONS.REFRESH_TOKENS)
             .doc(tokenRecord._id)
             .update({
@@ -194,7 +197,8 @@ export async function revokeRefreshToken(
     reason?: string
 ): Promise<boolean> {
     try {
-        await cloudbaseDB
+        const db = await getDatabase();
+        await db
             .collection(CLOUDBASE_COLLECTIONS.REFRESH_TOKENS)
             .where({ tokenId })
             .update({
@@ -223,7 +227,8 @@ export async function revokeAllUserTokens(
     reason?: string
 ): Promise<{ success: boolean; revokedCount: number; error?: string }> {
     try {
-        const result = await cloudbaseDB
+        const db = await getDatabase();
+        const result = await db
             .collection(CLOUDBASE_COLLECTIONS.REFRESH_TOKENS)
             .where({
                 userId,
@@ -263,10 +268,11 @@ export async function cleanupExpiredTokens(): Promise<number> {
     try {
         const now = new Date().toISOString();
 
-        const result = await cloudbaseDB
+        const db = await getDatabase();
+        const result = await db
             .collection(CLOUDBASE_COLLECTIONS.REFRESH_TOKENS)
             .where({
-                expiresAt: cloudbaseDB.command.lt(now),
+                expiresAt: db.command.lt(now),
             })
             .remove();
 
@@ -292,12 +298,13 @@ export async function getUserActiveTokens(
     try {
         const now = new Date().toISOString();
 
-        const result = await cloudbaseDB
+        const db = await getDatabase();
+        const result = await db
             .collection(CLOUDBASE_COLLECTIONS.REFRESH_TOKENS)
             .where({
                 userId,
                 isRevoked: false,
-                expiresAt: cloudbaseDB.command.gt(now),
+                expiresAt: db.command.gt(now),
             })
             .orderBy("createdAt", "desc")
             .get();
@@ -322,12 +329,13 @@ export async function detectAnomalousLogin(
             Date.now() - timeWindowMinutes * 60 * 1000
         ).toISOString();
 
-        const result = await cloudbaseDB
+        const db = await getDatabase();
+        const result = await db
             .collection(CLOUDBASE_COLLECTIONS.REFRESH_TOKENS)
             .where({
                 userId,
                 isRevoked: false,
-                createdAt: cloudbaseDB.command.gt(timeAgo),
+                createdAt: db.command.gt(timeAgo),
             })
             .get();
 

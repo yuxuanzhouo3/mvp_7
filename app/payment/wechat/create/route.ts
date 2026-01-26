@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Wechatpay } from 'wechatpay-axios-plugin'
 import { createClient } from '@supabase/supabase-js'
-import { db as cloudbaseDB } from '@/lib/database/cloudbase-client'
+import { getDatabase } from '@/lib/database/cloudbase-service'
 
 // 延迟初始化 Supabase 客户端，避免在构建时初始化
 let supabaseInstance: any = null;
@@ -127,7 +127,8 @@ export async function POST(req: NextRequest) {
         // 这里简化处理，实际应该根据用户IP判断
         try {
             // 保存到腾讯云（国内用户）
-            await cloudbaseDB.collection('web_payment_transactions').add(transactionRecord)
+            const db = await getDatabase();
+            await db.collection('web_payment_transactions').add(transactionRecord);
         } catch (error) {
             console.error('❌ 保存交易记录失败（腾讯云）:', error)
             // 如果腾讯云失败，尝试Supabase
