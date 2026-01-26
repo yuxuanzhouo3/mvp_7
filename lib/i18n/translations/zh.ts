@@ -38,6 +38,7 @@ export const zh = {
         adjustFilter: "尝试调整搜索或分类筛选",
         quickAccess: "快速访问",
         percent20: "20%",
+        version: "版本",
     },
 
     // ==================== Header ====================
