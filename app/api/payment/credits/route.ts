@@ -77,6 +77,12 @@ const alipayConfig: AlipaySdkConfig = {
     version: '1.0',
 };
 
+// 动态导入支付宝 SDK，避免构建时初始化
+async function getAlipaySdk() {
+    const { AlipaySdk } = await import('alipay-sdk');
+    return new AlipaySdk(alipayConfig);
+}
+
 // 价格配置
 const USD_TO_CNY_RATE = 7.2;
 
@@ -267,8 +273,8 @@ export async function POST(req: NextRequest) {
                 const subject = `SiteHub - ${creditAmount} Credits`;
                 const body_text = `Purchase ${creditAmount} credits - $${priceUSD}`;
 
-                // 初始化支付宝 SDK
-                const alipaySdk = new AlipaySdk(alipayConfig);
+                // 动态获取支付宝 SDK 实例
+                const alipaySdk = await getAlipaySdk();
 
                 // 创建支付宝订单参数
                 const formData = {
@@ -284,15 +290,17 @@ export async function POST(req: NextRequest) {
                     notifyUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/api/payment/alipay/notify`,
                 };
 
+                console.log('🚀 ~ file: [payment]/route.ts: 189 ~ alipaySdk.exec:' );
                 // 生成支付链接
-                const paymentUrl = alipaySdk.pageExec(formData.method as any, formData.bizContent as any, {
+                const paymentUrl = await alipaySdk.pageExec(formData.method as any, formData.bizContent as any, {
                     returnUrl: formData.returnUrl,
                     notifyUrl: formData.notifyUrl,
                     method: 'GET',
                 });
 
                 // 保存订单到数据库
-                const {data: alipayDbData, error: alipayDbError} = await getSupabase().from('payment_transactions').insert({
+                const db =  await getDatabase();
+                await db.collection('web_payment_transactions').add({
                     user_email: userEmail,
                     credit_amount: creditAmount,
                     amount_usd: priceUSD,
@@ -302,12 +310,22 @@ export async function POST(req: NextRequest) {
                     status: 'pending',
                     created_at: new Date().toISOString(),
                 });
-
-                if (alipayDbError) {
-                    console.error('⚠️ [Alipay] 数据库保存失败 (不影响支付):', alipayDbError);
-                } else {
-                    console.log('✅ [Alipay] 订单已保存到数据库');
-                }
+                // const {data: alipayDbData, error: alipayDbError} = await date().from('payment_transactions').insert({
+                //     user_email: userEmail,
+                //     credit_amount: creditAmount,
+                //     amount_usd: priceUSD,
+                //     amount_cny: parseFloat(amountCNYFixed),
+                //     payment_method: 'alipay',
+                //     transaction_id: outTradeNoAlipay,
+                //     status: 'pending',
+                //     created_at: new Date().toISOString(),
+                // });
+                //
+                // if (alipayDbError) {
+                //     console.error('⚠️ [Alipay] 数据库保存失败 (不影响支付):', alipayDbError);
+                // } else {
+                //     console.log('✅ [Alipay] 订单已保存到数据库');
+                // }
 
                 // 返回支付链接
                 return NextResponse.json({
@@ -315,6 +333,7 @@ export async function POST(req: NextRequest) {
                     orderId: outTradeNoAlipay,
                     amount: amountCNYFixed,
                     currency: 'CNY',
+                    ok: true,
                 });
 
             case 'paypal':

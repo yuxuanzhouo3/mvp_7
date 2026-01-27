@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import * as AlipaySdk from 'alipay-sdk'
+import AlipaySdk from 'alipay-sdk'  // 修改导入方式
 import { createClient } from '@supabase/supabase-js'
 
 // 延迟初始化 Supabase 客户端，避免在构建时初始化
@@ -9,20 +9,20 @@ function getSupabase() {
     if (!supabaseInstance) {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
         const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-        
+
         if (!supabaseUrl || !supabaseKey) {
             throw new Error('Supabase 配置缺失: NEXT_PUBLIC_SUPABASE_URL 和/或 SUPABASE_SERVICE_ROLE_KEY/NEXT_PUBLIC_SUPABASE_ANON_KEY 未设置');
         }
-        
+
         supabaseInstance = createClient(supabaseUrl, supabaseKey);
     }
-    
+
     return supabaseInstance;
 }
 
 // 支付宝支付配置
 const alipayConfig = {
-    appId: process.env.ALIPAY_APP_ID || '2021005199628151',
+    appId: process.env.ALIPAY_APP_ID || '9021000129650178',
     privateKey: process.env.ALIPAY_PRIVATE_KEY || '',
     alipayPublicKey: process.env.ALIPAY_PUBLIC_KEY || '',
     gateway: process.env.ALIPAY_GATEWAY || 'https://openapi.alipay.com/gateway.do',

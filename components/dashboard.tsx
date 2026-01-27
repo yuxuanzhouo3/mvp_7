@@ -50,7 +50,7 @@ import {
 interface User {
   id: string
   email: string
-  username?: string
+  name?: string
   full_name?: string
   avatar_url?: string
   credits: number
@@ -300,6 +300,12 @@ export function Dashboard() {
     } else {
       user && setUser(JSON.parse(user))
     }
+    //支付方式默认值
+    if (isChinaRegion) {
+      setPaymentMethod('wechatpay')
+    } else {
+      setPaymentMethod('card')
+    }
 
   }, [])
 
@@ -419,18 +425,22 @@ export function Dashboard() {
         } else if (paymentMethod === 'alipay' && result.paymentUrl) {
           // 重定向到支付宝支付页面
           window.location.href = result.paymentUrl;
+          setShowCreditPurchase(false);
           return;
         } else if (paymentMethod === 'card' && result.url) {
           // 重定向到 Stripe 支付页面
           window.location.href = result.url;
+          setShowCreditPurchase(false);
           return;
         } else if (paymentMethod === 'paypal' && result.paymentUrl) {
           // 重定向到 PayPal 支付页面
           window.location.href = result.paymentUrl;
+          setShowCreditPurchase(false);
           return;
         } else if (paymentMethod === 'crypto' && result.paymentUrl) {
           // 重定向到加密货币支付页面
           window.location.href = result.paymentUrl;
+          setShowCreditPurchase(false);
           return;
         } else {
           throw new Error(`Failed to get payment details for ${paymentMethod}`);
@@ -886,12 +896,12 @@ export function Dashboard() {
                         >
                           {t.payment.buyCredits}
                         </button>
-                        <button
-                            onClick={() => setShowSubscriptions(true)}
-                            className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
-                        >
-                          {t.payment.upgradePlan}
-                        </button>
+                        {/*<button*/}
+                        {/*    onClick={() => setShowSubscriptions(true)}*/}
+                        {/*    className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"*/}
+                        {/*>*/}
+                        {/*  {t.payment.upgradePlan}*/}
+                        {/*</button>*/}
                       </div>
                       {/*<PaymentSystem user={user} onCreditsUpdate={handleCreditsUpdate}/>*/}
                       {/*<AIOperations user={user} />*/}
@@ -969,7 +979,7 @@ export function Dashboard() {
                               alt="Avatar"
                               className="w-6 h-6 rounded-full"
                           />
-                          <span>{user.full_name || user.username || 'User'}</span>
+                          <span>{user.name || user.email || 'User'}</span>
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
                           </svg>
@@ -988,7 +998,7 @@ export function Dashboard() {
                                   className="w-12 h-12 rounded-full"
                               />
                               <div>
-                                <div className="font-medium">{user.full_name || user.username}</div>
+                                <div className="font-medium">{user.full_name || user.name}</div>
                                 <div className="text-sm text-gray-500">{user.email}</div>
                               </div>
                             </div>
