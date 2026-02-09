@@ -9,6 +9,7 @@ import { useTranslations } from "@/lib/i18n";
 import { categories, tools, Tool } from "./tools-data"
 import { getToolCreditCost } from "@/lib/credits/pricing"
 import { Star, Clock, Search } from "lucide-react"
+import { AdBanner } from "./ad-banner"
 
 interface MainContentProps {
   selectedCategory: string
@@ -92,6 +93,8 @@ export function MainContent({
       </div>
 
       {/* Tools Grid */}
+      <AdBanner />
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredTools.map((tool) => {
           const Icon = tool.icon;

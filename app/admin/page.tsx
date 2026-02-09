@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 
 type Region = "CN" | "INTL"
-type TabKey = "overview" | "users" | "orders" | "downloads" | "packages"
+type TabKey = "overview" | "users" | "orders" | "downloads" | "packages" | "ads"
 
 const PLATFORM_OPTIONS = ["windows", "macos", "linux", "android", "ios"] as const
 
@@ -81,6 +81,17 @@ type DownloadPackage = {
   downloadCount: number
 }
 
+type AdminAd = {
+  id: string
+  region: Region
+  title: string
+  imageUrl: string
+  linkUrl: string
+  placement: string
+  isActive: boolean
+  sortOrder: number
+}
+
 export default function AdminPage() {
   const router = useRouter()
 
@@ -94,6 +105,7 @@ export default function AdminPage() {
   const [orders, setOrders] = useState<AdminOrder[]>([])
   const [events, setEvents] = useState<DownloadEvent[]>([])
   const [packages, setPackages] = useState<DownloadPackage[]>([])
+  const [ads, setAds] = useState<AdminAd[]>([])
 
   const [region, setRegion] = useState<Region>("CN")
   const [platform, setPlatform] = useState("windows")
@@ -102,6 +114,11 @@ export default function AdminPage() {
   const [isActive, setIsActive] = useState(true)
   const [file, setFile] = useState<File | null>(null)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [adRegion, setAdRegion] = useState<Region>("CN")
+  const [adTitle, setAdTitle] = useState("")
+  const [adImageUrl, setAdImageUrl] = useState("")
+  const [adLinkUrl, setAdLinkUrl] = useState("")
+  const [adSortOrder, setAdSortOrder] = useState(0)
 
   const tabs = useMemo(
     () => [
@@ -110,6 +127,7 @@ export default function AdminPage() {
       { key: "orders", label: "订单管理" },
       { key: "downloads", label: "下载日志" },
       { key: "packages", label: "安装包替换" },
+      { key: "ads", label: "广告管理" },
     ] as { key: TabKey; label: string }[],
     []
   )
@@ -128,12 +146,13 @@ export default function AdminPage() {
     setError("")
 
     try {
-      const [statsRes, usersRes, ordersRes, eventsRes, packagesRes] = await Promise.all([
+      const [statsRes, usersRes, ordersRes, eventsRes, packagesRes, adsRes] = await Promise.all([
         fetch("/api/admin/stats"),
         fetch("/api/admin/users?limit=50"),
         fetch("/api/admin/orders?limit=50"),
         fetch("/api/admin/download-events?limit=50"),
         fetch("/api/admin/packages"),
+        fetch("/api/admin/ads"),
       ])
 
       const statsJson = await statsRes.json()
@@ -141,18 +160,21 @@ export default function AdminPage() {
       const ordersJson = await ordersRes.json()
       const eventsJson = await eventsRes.json()
       const packagesJson = await packagesRes.json()
+      const adsJson = await adsRes.json()
 
       if (!statsRes.ok) throw new Error(statsJson?.error || "stats failed")
       if (!usersRes.ok) throw new Error(usersJson?.error || "users failed")
       if (!ordersRes.ok) throw new Error(ordersJson?.error || "orders failed")
       if (!eventsRes.ok) throw new Error(eventsJson?.error || "download events failed")
       if (!packagesRes.ok) throw new Error(packagesJson?.error || "packages failed")
+      if (!adsRes.ok) throw new Error(adsJson?.error || "ads failed")
 
       setStats(statsJson.stats || null)
       setUsers(usersJson.users || [])
       setOrders(ordersJson.orders || [])
       setEvents(eventsJson.events || [])
       setPackages(packagesJson.packages || [])
+      setAds(adsJson.ads || [])
     } catch (err: any) {
       setError(err?.message || "加载失败")
     } finally {
@@ -270,6 +292,85 @@ export default function AdminPage() {
       await fetchAll()
     } catch (err: any) {
       setError(err?.message || "删除失败")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const createAd = async () => {
+    if (!adTitle || !adImageUrl || !adLinkUrl) {
+      setError("请填写广告标题、图片地址、跳转地址")
+      return
+    }
+
+    setLoading(true)
+    setError("")
+    try {
+      const response = await fetch("/api/admin/ads", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          region: adRegion,
+          title: adTitle,
+          imageUrl: adImageUrl,
+          linkUrl: adLinkUrl,
+          placement: "dashboard_top",
+          sortOrder: adSortOrder,
+          isActive: true,
+        }),
+      })
+
+      const result = await response.json()
+      if (!response.ok) throw new Error(result?.error || "创建广告失败")
+
+      setAdTitle("")
+      setAdImageUrl("")
+      setAdLinkUrl("")
+      setAdSortOrder(0)
+      await fetchAll()
+    } catch (err: any) {
+      setError(err?.message || "创建广告失败")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const toggleAd = async (ad: AdminAd) => {
+    setLoading(true)
+    setError("")
+    try {
+      const response = await fetch(`/api/admin/ads/${encodeURIComponent(ad.id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ region: ad.region, isActive: !ad.isActive }),
+      })
+
+      const result = await response.json()
+      if (!response.ok) throw new Error(result?.error || "更新广告失败")
+      await fetchAll()
+    } catch (err: any) {
+      setError(err?.message || "更新广告失败")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const deleteAdItem = async (ad: AdminAd) => {
+    const confirmed = window.confirm(`确认删除广告「${ad.title}」吗？`)
+    if (!confirmed) return
+
+    setLoading(true)
+    setError("")
+    try {
+      const response = await fetch(
+        `/api/admin/ads/${encodeURIComponent(ad.id)}?region=${encodeURIComponent(ad.region)}`,
+        { method: "DELETE" }
+      )
+      const result = await response.json()
+      if (!response.ok) throw new Error(result?.error || "删除广告失败")
+      await fetchAll()
+    } catch (err: any) {
+      setError(err?.message || "删除广告失败")
     } finally {
       setLoading(false)
     }
@@ -441,6 +542,69 @@ export default function AdminPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </Panel>
+          )}
+
+          {tab === "ads" && (
+            <Panel title="广告管理">
+              <div className="grid md:grid-cols-2 gap-4 mb-4">
+                <Field label="区域">
+                  <select
+                    value={adRegion}
+                    onChange={(event) => setAdRegion(event.target.value as Region)}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="CN">国内版</option>
+                    <option value="INTL">国际版</option>
+                  </select>
+                </Field>
+
+                <Field label="排序（越小越靠前）">
+                  <Input
+                    type="number"
+                    value={adSortOrder}
+                    onChange={(event) => setAdSortOrder(Number(event.target.value || 0))}
+                  />
+                </Field>
+
+                <Field label="广告标题">
+                  <Input value={adTitle} onChange={(event) => setAdTitle(event.target.value)} placeholder="例如：新用户限时活动" />
+                </Field>
+
+                <Field label="图片地址">
+                  <Input value={adImageUrl} onChange={(event) => setAdImageUrl(event.target.value)} placeholder="https://.../banner.png" />
+                </Field>
+              </div>
+
+              <Field label="跳转地址">
+                <Input value={adLinkUrl} onChange={(event) => setAdLinkUrl(event.target.value)} placeholder="https://..." />
+              </Field>
+
+              <Button className="mt-3" onClick={createAd} disabled={loading}>新增广告</Button>
+
+              <div className="space-y-2 mt-5">
+                {ads.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">暂无广告</p>
+                ) : (
+                  ads.map((ad) => (
+                    <div key={`${ad.region}-${ad.id}`} className="border rounded-lg p-3 flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">[{ad.region}] {ad.title}</div>
+                        <div className="text-xs text-muted-foreground mt-1 truncate">{ad.imageUrl}</div>
+                        <div className="text-xs text-muted-foreground mt-1 truncate">{ad.linkUrl}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant={ad.isActive ? "destructive" : "outline"} onClick={() => toggleAd(ad)}>
+                          {ad.isActive ? "下线" : "上线"}
+                        </Button>
+                        <Button variant="outline" onClick={() => deleteAdItem(ad)}>
+                          删除
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </Panel>
           )}
