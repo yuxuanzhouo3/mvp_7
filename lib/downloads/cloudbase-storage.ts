@@ -25,11 +25,13 @@ export async function uploadToCloudbaseStorage(input: {
   fileName: string
   data: Buffer
   mimeType?: string
+  directory?: string
 }) {
   const app = await getCloudbaseApp()
   const timestamp = Date.now()
   const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_")
-  const cloudPath = `downloads/${timestamp}_${safeName}`
+  const directory = String(input.directory || "downloads").replace(/^\/+|\/+$/g, "") || "downloads"
+  const cloudPath = `${directory}/${timestamp}_${safeName}`
 
   const result = await app.uploadFile({
     cloudPath,
@@ -40,6 +42,17 @@ export async function uploadToCloudbaseStorage(input: {
     fileID: String(result.fileID),
     cloudPath,
   }
+}
+
+export async function getCloudbaseTempFileURL(fileID: string): Promise<string> {
+  const app = await getCloudbaseApp()
+  const result = await app.getTempFileURL({ fileList: [fileID] })
+  const first = Array.isArray(result?.fileList) ? result.fileList[0] : null
+  const tempUrl = String(first?.tempFileURL || "")
+  if (!tempUrl) {
+    throw new Error("Failed to resolve CloudBase temp file URL")
+  }
+  return tempUrl
 }
 
 export async function deleteFromCloudbaseStorage(fileID: string) {

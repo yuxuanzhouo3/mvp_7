@@ -204,8 +204,8 @@ export function Header({
             </div>
           </div>
 
-          <div className="hidden lg:flex flex-none justify-center">
-            <div className="relative w-full max-w-sm">
+          <div className="hidden lg:flex flex-1 justify-center px-4">
+            <div className="relative w-full max-w-2xl">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground"/>
               <Input
                 placeholder={t.common.search}

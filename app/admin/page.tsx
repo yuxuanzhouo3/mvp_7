@@ -12,6 +12,15 @@ type TabKey = "overview" | "users" | "orders" | "downloads" | "packages" | "ads"
 
 const PLATFORM_OPTIONS = ["windows", "macos", "linux", "android", "ios"] as const
 
+const AD_PLACEMENT_OPTIONS = [
+  { value: "dashboard_top", label: "首页顶部" },
+  { value: "dashboard_middle", label: "首页中部" },
+  { value: "dashboard_bottom", label: "首页底部" },
+  { value: "downloads_top", label: "下载页顶部" },
+  { value: "downloads_bottom", label: "下载页底部" },
+  { value: "sidebar", label: "侧边栏" },
+] as const
+
 type DashboardStats = {
   overview: {
     totalUsers: number
@@ -90,6 +99,18 @@ type AdminAd = {
   placement: string
   isActive: boolean
   sortOrder: number
+  clickCount?: number
+}
+
+type AdClickStats = {
+  totalClicks: number
+  clicksByRegion: {
+    CN: number
+    INTL: number
+  }
+  clicksByPlacement: Record<string, number>
+  clicksByAd: Record<string, number>
+  recentDaily: Array<{ date: string; clicks: number }>
 }
 
 export default function AdminPage() {
@@ -106,6 +127,7 @@ export default function AdminPage() {
   const [events, setEvents] = useState<DownloadEvent[]>([])
   const [packages, setPackages] = useState<DownloadPackage[]>([])
   const [ads, setAds] = useState<AdminAd[]>([])
+  const [adStats, setAdStats] = useState<AdClickStats | null>(null)
 
   const [region, setRegion] = useState<Region>("CN")
   const [platform, setPlatform] = useState("windows")
@@ -119,6 +141,9 @@ export default function AdminPage() {
   const [adImageUrl, setAdImageUrl] = useState("")
   const [adLinkUrl, setAdLinkUrl] = useState("")
   const [adSortOrder, setAdSortOrder] = useState(0)
+  const [adPlacement, setAdPlacement] = useState<string>("dashboard_top")
+  const [adImageFile, setAdImageFile] = useState<File | null>(null)
+  const [adUploadProgress, setAdUploadProgress] = useState<number | null>(null)
 
   const tabs = useMemo(
     () => [
@@ -146,13 +171,14 @@ export default function AdminPage() {
     setError("")
 
     try {
-      const [statsRes, usersRes, ordersRes, eventsRes, packagesRes, adsRes] = await Promise.all([
+      const [statsRes, usersRes, ordersRes, eventsRes, packagesRes, adsRes, adStatsRes] = await Promise.all([
         fetch("/api/admin/stats"),
         fetch("/api/admin/users?limit=50"),
         fetch("/api/admin/orders?limit=50"),
         fetch("/api/admin/download-events?limit=50"),
         fetch("/api/admin/packages"),
         fetch("/api/admin/ads"),
+        fetch("/api/admin/ads/stats?days=30"),
       ])
 
       const statsJson = await statsRes.json()
@@ -161,6 +187,7 @@ export default function AdminPage() {
       const eventsJson = await eventsRes.json()
       const packagesJson = await packagesRes.json()
       const adsJson = await adsRes.json()
+      const adStatsJson = await adStatsRes.json()
 
       if (!statsRes.ok) throw new Error(statsJson?.error || "stats failed")
       if (!usersRes.ok) throw new Error(usersJson?.error || "users failed")
@@ -168,6 +195,7 @@ export default function AdminPage() {
       if (!eventsRes.ok) throw new Error(eventsJson?.error || "download events failed")
       if (!packagesRes.ok) throw new Error(packagesJson?.error || "packages failed")
       if (!adsRes.ok) throw new Error(adsJson?.error || "ads failed")
+      if (!adStatsRes.ok) throw new Error(adStatsJson?.error || "ads stats failed")
 
       setStats(statsJson.stats || null)
       setUsers(usersJson.users || [])
@@ -175,6 +203,7 @@ export default function AdminPage() {
       setEvents(eventsJson.events || [])
       setPackages(packagesJson.packages || [])
       setAds(adsJson.ads || [])
+      setAdStats(adStatsJson.stats || null)
     } catch (err: any) {
       setError(err?.message || "加载失败")
     } finally {
@@ -297,9 +326,114 @@ export default function AdminPage() {
     }
   }
 
+  const compressAdImage = async (input: File) => {
+    if (!input.type.startsWith("image/") || input.size <= 800 * 1024) {
+      return input
+    }
+
+    const bitmap = await createImageBitmap(input)
+    const maxWidth = 1600
+    const ratio = bitmap.width > maxWidth ? maxWidth / bitmap.width : 1
+    const targetWidth = Math.max(1, Math.round(bitmap.width * ratio))
+    const targetHeight = Math.max(1, Math.round(bitmap.height * ratio))
+
+    const canvas = document.createElement("canvas")
+    canvas.width = targetWidth
+    canvas.height = targetHeight
+
+    const context = canvas.getContext("2d")
+    if (!context) return input
+
+    context.drawImage(bitmap, 0, 0, targetWidth, targetHeight)
+
+    const compressed = await new Promise<File>((resolve) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            resolve(input)
+            return
+          }
+          const ext = input.type.includes("png") ? "png" : "jpg"
+          const file = new File([blob], input.name.replace(/\.[^.]+$/, `.${ext}`), {
+            type: blob.type || "image/jpeg",
+          })
+          resolve(file.size < input.size ? file : input)
+        },
+        input.type.includes("png") ? "image/png" : "image/jpeg",
+        0.82
+      )
+    })
+
+    return compressed
+  }
+
+  const uploadAdImage = async (fileOverride?: File | null) => {
+    const fileToUpload = fileOverride || adImageFile
+    if (!fileToUpload) {
+      setError("请先选择广告图片")
+      return
+    }
+
+    setLoading(true)
+    setError("")
+    setAdUploadProgress(0)
+
+    try {
+      const optimizedFile = await compressAdImage(fileToUpload)
+
+      const formData = new FormData()
+      formData.set("region", adRegion)
+      formData.set("file", optimizedFile)
+
+      const result = await new Promise<any>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open("POST", "/api/admin/ads/upload")
+        xhr.withCredentials = true
+
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return
+          const percent = Math.round((event.loaded / event.total) * 100)
+          setAdUploadProgress(percent)
+        }
+
+        xhr.onerror = () => reject(new Error("广告图片上传失败"))
+
+        xhr.onload = () => {
+          let data: any = null
+          try {
+            data = xhr.responseText ? JSON.parse(xhr.responseText) : null
+          } catch {
+            data = null
+          }
+
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(data)
+            return
+          }
+
+          reject(new Error(data?.error || "广告图片上传失败"))
+        }
+
+        xhr.send(formData)
+      })
+
+      if (!result?.success) {
+        throw new Error(result?.error || "广告图片上传失败")
+      }
+
+      setAdImageUrl(String(result.imageUrl || ""))
+      setAdUploadProgress(100)
+    } catch (err: any) {
+      setError(err?.message || "广告图片上传失败")
+    } finally {
+      setLoading(false)
+      setTimeout(() => setAdUploadProgress(null), 800)
+    }
+  }
+
   const createAd = async () => {
-    if (!adTitle || !adImageUrl || !adLinkUrl) {
-      setError("请填写广告标题、图片地址、跳转地址")
+    if (!adImageUrl || !adLinkUrl) {
+      setError("请先上传广告图片，再填写跳转地址")
       return
     }
 
@@ -314,7 +448,7 @@ export default function AdminPage() {
           title: adTitle,
           imageUrl: adImageUrl,
           linkUrl: adLinkUrl,
-          placement: "dashboard_top",
+          placement: adPlacement,
           sortOrder: adSortOrder,
           isActive: true,
         }),
@@ -327,6 +461,8 @@ export default function AdminPage() {
       setAdImageUrl("")
       setAdLinkUrl("")
       setAdSortOrder(0)
+      setAdPlacement("dashboard_top")
+      setAdImageFile(null)
       await fetchAll()
     } catch (err: any) {
       setError(err?.message || "创建广告失败")
@@ -548,6 +684,37 @@ export default function AdminPage() {
 
           {tab === "ads" && (
             <Panel title="广告管理">
+              <div className="grid md:grid-cols-3 gap-3 mb-4">
+                <div className="rounded-lg border p-3 bg-muted/30">
+                  <div className="text-xs text-muted-foreground">近30天总点击</div>
+                  <div className="text-xl font-semibold mt-1">{adStats?.totalClicks || 0}</div>
+                </div>
+                <div className="rounded-lg border p-3 bg-muted/30">
+                  <div className="text-xs text-muted-foreground">国内版点击</div>
+                  <div className="text-xl font-semibold mt-1">{adStats?.clicksByRegion?.CN || 0}</div>
+                </div>
+                <div className="rounded-lg border p-3 bg-muted/30">
+                  <div className="text-xs text-muted-foreground">国际版点击</div>
+                  <div className="text-xl font-semibold mt-1">{adStats?.clicksByRegion?.INTL || 0}</div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-3 mb-5 bg-background">
+                <div className="text-sm font-medium">广告位点击统计（近30天）</div>
+                <div className="grid md:grid-cols-3 gap-2 mt-3 text-sm">
+                  {Object.entries(adStats?.clicksByPlacement || {})
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([placement, count]) => (
+                      <div key={placement} className="rounded border px-2 py-1.5 flex items-center justify-between">
+                        <span className="text-muted-foreground">{placement}</span>
+                        <span className="font-medium">{count}</span>
+                      </div>
+                    ))}
+                  {Object.keys(adStats?.clicksByPlacement || {}).length === 0 ? (
+                    <div className="text-xs text-muted-foreground">暂无点击数据</div>
+                  ) : null}
+                </div>
+              </div>
               <div className="grid md:grid-cols-2 gap-4 mb-4">
                 <Field label="区域">
                   <select
@@ -560,6 +727,18 @@ export default function AdminPage() {
                   </select>
                 </Field>
 
+                <Field label="广告位">
+                  <select
+                    value={adPlacement}
+                    onChange={(event) => setAdPlacement(event.target.value)}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    {AD_PLACEMENT_OPTIONS.map((item) => (
+                      <option key={item.value} value={item.value}>{item.label}</option>
+                    ))}
+                  </select>
+                </Field>
+
                 <Field label="排序（越小越靠前）">
                   <Input
                     type="number"
@@ -568,18 +747,58 @@ export default function AdminPage() {
                   />
                 </Field>
 
-                <Field label="广告标题">
+                <Field label="广告标题（可选）">
                   <Input value={adTitle} onChange={(event) => setAdTitle(event.target.value)} placeholder="例如：新用户限时活动" />
-                </Field>
-
-                <Field label="图片地址">
-                  <Input value={adImageUrl} onChange={(event) => setAdImageUrl(event.target.value)} placeholder="https://.../banner.png" />
                 </Field>
               </div>
 
-              <Field label="跳转地址">
-                <Input value={adLinkUrl} onChange={(event) => setAdLinkUrl(event.target.value)} placeholder="https://..." />
-              </Field>
+              <div className="grid md:grid-cols-[1fr_auto] gap-3 items-end">
+                <Field label="广告图片（管理员上传）">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      const selected = event.target.files?.[0] || null
+                      setAdImageFile(selected)
+                      setAdImageUrl("")
+                      if (selected) {
+                        void uploadAdImage(selected)
+                      }
+                    }}
+                  />
+                </Field>
+                <Button onClick={() => uploadAdImage()} disabled={loading || !adImageFile}>重新上传</Button>
+              </div>
+
+              {adUploadProgress !== null ? (
+                <div className="mt-3 space-y-1">
+                  <div className="h-2 w-full rounded bg-muted overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all"
+                      style={{ width: `${adUploadProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">上传进度：{adUploadProgress}%</p>
+                </div>
+              ) : null}
+
+              <div className="grid md:grid-cols-2 gap-4 mt-4">
+                <Field label="跳转地址">
+                  <Input value={adLinkUrl} onChange={(event) => setAdLinkUrl(event.target.value)} placeholder="https://..." />
+                </Field>
+
+                <Field label="上传状态">
+                  <div className="h-10 rounded-md border border-input bg-muted/20 px-3 flex items-center text-sm text-muted-foreground">
+                    {adImageUrl ? "图片已上传" : "请选择图片后自动上传"}
+                  </div>
+                </Field>
+              </div>
+
+              {/^https?:\/\//i.test(adImageUrl) ? (
+                <div className="mt-3 rounded-md border bg-background p-2 inline-block">
+                  <img src={adImageUrl} alt="广告预览" className="h-24 w-auto rounded object-cover" />
+                </div>
+              ) : null}
 
               <Button className="mt-3" onClick={createAd} disabled={loading}>新增广告</Button>
 
@@ -591,6 +810,8 @@ export default function AdminPage() {
                     <div key={`${ad.region}-${ad.id}`} className="border rounded-lg p-3 flex items-center justify-between gap-4">
                       <div className="min-w-0">
                         <div className="font-medium truncate">[{ad.region}] {ad.title}</div>
+                        <div className="text-xs text-muted-foreground mt-1 truncate">广告位：{ad.placement}</div>
+                        <div className="text-xs text-muted-foreground mt-1 truncate">点击：{ad.clickCount || 0}</div>
                         <div className="text-xs text-muted-foreground mt-1 truncate">{ad.imageUrl}</div>
                         <div className="text-xs text-muted-foreground mt-1 truncate">{ad.linkUrl}</div>
                       </div>

@@ -23,3 +23,7 @@ export function getSupabaseAdminForDownloads() {
 export function getSupabaseDownloadBucket() {
   return process.env.SUPABASE_DOWNLOAD_BUCKET || "downloads"
 }
+
+export function getSupabaseAdBucket() {
+  return process.env.SUPABASE_ADS_BUCKET || process.env.SUPABASE_DOWNLOAD_BUCKET || "downloads"
+}

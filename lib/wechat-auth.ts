@@ -23,22 +23,24 @@ interface WeChatUserInfo {
     unionid?: string
 }
 
-// Initialize WeChat OAuth client (only when needed, not on module load)
+function getWechatLoginConfig() {
+    const appId = (process.env.WECHAT_APP_ID_weblogin || '').trim()
+    const appSecret = (process.env.WECHAT_APP_SECRET_weblogin || '').trim()
+    return { appId, appSecret }
+}
+
 let oauthClient: OAuth | null = null
 
 function getOAuthClient() {
-    // 检查是否在构建环境中
     if (!oauthClient) {
-        if (!process.env.NEXT_PUBLIC_WECHAT_APP_ID || !process.env.NEXT_PUBLIC_WECHAT_APP_SECRET) {
-            console.log('⚠️ [WeChat] 缺少微信登录配置，请检查 NEXT_PUBLIC_WECHAT_APP_ID 和 NEXT_PUBLIC_WECHAT_APP_SECRET 环境变量')
-            // throw new Error('WeChat OAuth 未配置，缺少 NEXT_PUBLIC_WECHAT_APP_ID 或 NEXT_PUBLIC_WECHAT_APP_SECRET 环境变量');
-            return null;
+        const { appId, appSecret } = getWechatLoginConfig()
+
+        if (!appId || !appSecret) {
+            console.log('⚠️ [WeChat] 缺少微信登录配置，请检查 WECHAT_APP_ID_weblogin 和 WECHAT_APP_SECRET_weblogin 环境变量')
+            return null
         }
 
-        oauthClient = new OAuth(
-            process.env.NEXT_PUBLIC_WECHAT_APP_ID!,
-            process.env.NEXT_PUBLIC_WECHAT_APP_SECRET!
-        )
+        oauthClient = new OAuth(appId, appSecret)
     }
 
     return oauthClient
@@ -46,9 +48,9 @@ function getOAuthClient() {
 
 export const wechatAuth = {
     getAuthUrl: () => {
-        const client = getOAuthClient();
+        const client = getOAuthClient()
         if (!client) {
-            throw new Error('WeChat OAuth 客户端未正确初始化，可能处于构建环境中');
+            throw new Error('WeChat OAuth 客户端未正确初始化，可能处于构建环境中')
         }
 
         const state = Math.random().toString(36).substring(7)
@@ -60,9 +62,9 @@ export const wechatAuth = {
     },
 
     getAccessToken: (code: string): Promise<WeChatTokenResult> => {
-        const client = getOAuthClient();
+        const client = getOAuthClient()
         if (!client) {
-            throw new Error('WeChat OAuth 客户端未正确初始化，可能处于构建环境中');
+            throw new Error('WeChat OAuth 客户端未正确初始化，可能处于构建环境中')
         }
 
         return new Promise((resolve, reject) => {
@@ -74,9 +76,9 @@ export const wechatAuth = {
     },
 
     getUserInfo: (openid: string, accessToken: string): Promise<WeChatUserInfo> => {
-        const client = getOAuthClient();
+        const client = getOAuthClient()
         if (!client) {
-            throw new Error('WeChat OAuth 客户端未正确初始化，可能处于构建环境中');
+            throw new Error('WeChat OAuth 客户端未正确初始化，可能处于构建环境中')
         }
 
         return new Promise((resolve, reject) => {
@@ -87,21 +89,18 @@ export const wechatAuth = {
         })
     },
 
-    // New method to handle WeChat user authentication with Supabase
     authenticateUser: async (userInfo: WeChatUserInfo) => {
         try {
-            // First, try to find existing user by WeChat openid
-            const { data: existingUser, error: fetchError } = await getSupabaseClient()
+            const { data: existingUser } = await getSupabaseClient()
                 .from('profiles')
                 .select('*')
                 .eq('wechat_openid', userInfo.openid)
                 .single()
 
             if (existingUser) {
-                // User exists, create a session
-                const { data: sessionData, error: sessionError } = await getSupabaseClient().auth.signInWithPassword({
+                const { error: sessionError } = await getSupabaseClient().auth.signInWithPassword({
                     email: existingUser.email,
-                    password: 'wechat_user_' + userInfo.openid // This should be handled differently in production
+                    password: 'wechat_user_' + userInfo.openid,
                 })
 
                 if (sessionError) {
@@ -109,38 +108,37 @@ export const wechatAuth = {
                 }
 
                 return { user: existingUser, isNew: false }
-            } else {
-                // Create new user
-                const email = `${userInfo.openid}@wechat.local`
-                const password = 'wechat_user_' + userInfo.openid + '_' + Math.random().toString(36).substring(7)
-
-                const { data: authData, error: authError } = await getSupabaseClient().auth.signUp({
-                    email,
-                    password,
-                    options: {
-                        data: {
-                            provider: 'wechat',
-                            wechat_openid: userInfo.openid,
-                            wechat_unionid: userInfo.unionid,
-                            nickname: userInfo.nickname,
-                            avatar_url: userInfo.headimgurl,
-                            full_name: userInfo.nickname,
-                            city: userInfo.city,
-                            province: userInfo.province,
-                            country: userInfo.country
-                        }
-                    }
-                })
-
-                if (authError) {
-                    throw authError
-                }
-
-                return { user: authData.user, isNew: true }
             }
+
+            const email = `${userInfo.openid}@wechat.local`
+            const password = 'wechat_user_' + userInfo.openid + '_' + Math.random().toString(36).substring(7)
+
+            const { data: authData, error: authError } = await getSupabaseClient().auth.signUp({
+                email,
+                password,
+                options: {
+                    data: {
+                        provider: 'wechat',
+                        wechat_openid: userInfo.openid,
+                        wechat_unionid: userInfo.unionid,
+                        nickname: userInfo.nickname,
+                        avatar_url: userInfo.headimgurl,
+                        full_name: userInfo.nickname,
+                        city: userInfo.city,
+                        province: userInfo.province,
+                        country: userInfo.country,
+                    },
+                },
+            })
+
+            if (authError) {
+                throw authError
+            }
+
+            return { user: authData.user, isNew: true }
         } catch (error) {
             console.error('WeChat authentication error:', error)
             throw error
         }
-    }
+    },
 }
