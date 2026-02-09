@@ -18,22 +18,21 @@ export function validateEnvironmentConfig(isChinaRegion: boolean = true): Config
 
   // 根据区域验证必需的环境变量
   if (isChinaRegion) {
-    // CloudBase 相关配置
-    if (!process.env.NEXT_PUBLIC_WECHAT_CLOUDBASE_ID) {
-      missingVariables.push('NEXT_PUBLIC_WECHAT_CLOUDBASE_ID');
+    // CloudBase MySQL 相关配置
+    if (!process.env.CLOUDBASE_MYSQL_HOST) {
+      missingVariables.push('CLOUDBASE_MYSQL_HOST');
     }
-    
-    if (!process.env.CLOUDBASE_SECRET_ID) {
-      missingVariables.push('CLOUDBASE_SECRET_ID');
+    if (!process.env.CLOUDBASE_MYSQL_PORT) {
+      missingVariables.push('CLOUDBASE_MYSQL_PORT');
     }
-    
-    if (!process.env.CLOUDBASE_SECRET_KEY) {
-      missingVariables.push('CLOUDBASE_SECRET_KEY');
+    if (!process.env.CLOUDBASE_MYSQL_DATABASE) {
+      missingVariables.push('CLOUDBASE_MYSQL_DATABASE');
     }
-
-    // Vite 配置
-    if (!process.env.VITE_CLOUDBASE_ACCESS_KEY) {
-      warnings.push('VITE_CLOUDBASE_ACCESS_KEY is recommended for client-side initialization');
+    if (!process.env.CLOUDBASE_MYSQL_USER) {
+      missingVariables.push('CLOUDBASE_MYSQL_USER');
+    }
+    if (!process.env.CLOUDBASE_MYSQL_PASSWORD) {
+      missingVariables.push('CLOUDBASE_MYSQL_PASSWORD');
     }
   } else {
     // Supabase 相关配置
@@ -105,7 +104,7 @@ export function printConfigValidationResult(result: ConfigValidationResult): voi
  */
 export function validateAndReportConfig(): void {
   // 检测部署区域
-  const region = (process.env.NEXT_PUBLIC_DEPLOYMENT_REGION || process.env.DEPLOYMENT_REGION || 'CN').toUpperCase();
+  const region = (process.env.DEPLOYMENT_REGION || process.env.NEXT_PUBLIC_DEPLOYMENT_REGION || 'CN').toUpperCase();
   const isChinaRegion = region === 'CN';
 
   // 检测是否为构建阶段

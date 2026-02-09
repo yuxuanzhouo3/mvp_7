@@ -44,42 +44,42 @@
 }
 
 .dark {
-  /* Updated dark theme to use deep blue instead of black */
-  --background: oklch(0.08 0.02 240); /* Very dark blue background */
-  --foreground: oklch(0.95 0 0);
-  --card: oklch(0.12 0.02 240); /* Slightly lighter dark blue for cards */
-  --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.12 0.02 240);
-  --popover-foreground: oklch(0.95 0 0);
-  --primary: oklch(0.75 0.12 220); /* Bright blue primary */
-  --primary-foreground: oklch(0.08 0.02 240);
-  --secondary: oklch(0.18 0.02 240);
-  --secondary-foreground: oklch(0.95 0 0);
-  --muted: oklch(0.18 0.02 240);
-  --muted-foreground: oklch(0.65 0 0);
-  --accent: oklch(0.18 0.02 240);
-  --accent-foreground: oklch(0.95 0 0);
+  /* Updated dark theme: lifted brightness and softened contrast to make it less "pitch black" */
+  --background: oklch(0.18 0.015 240); /* Soft navy background */
+  --foreground: oklch(0.92 0.005 240); /* Softer off-white foreground */
+  --card: oklch(0.21 0.015 240); /* Elevated card surface */
+  --card-foreground: oklch(0.92 0.005 240);
+  --popover: oklch(0.21 0.015 240);
+  --popover-foreground: oklch(0.92 0.005 240);
+  --primary: oklch(0.8 0.1 220); /* Brighter, more accessible primary blue */
+  --primary-foreground: oklch(0.15 0.015 240);
+  --secondary: oklch(0.25 0.015 240);
+  --secondary-foreground: oklch(0.92 0.005 240);
+  --muted: oklch(0.25 0.015 240);
+  --muted-foreground: oklch(0.7 0.01 240); /* Brighter muted text for readability */
+  --accent: oklch(0.25 0.015 240);
+  --accent-foreground: oklch(0.92 0.005 240);
   --destructive: oklch(0.55 0.2 25);
   --destructive-foreground: oklch(0.95 0 0);
-  --border: oklch(0.18 0.02 240);
-  --input: oklch(0.18 0.02 240);
-  --ring: oklch(0.65 0.15 220);
+  --border: oklch(0.26 0.015 240); /* Visible but subtle borders */
+  --input: oklch(0.26 0.015 240);
+  --ring: oklch(0.7 0.1 220);
 
-  /* Category accent colors for dark mode */
-  --job-application: oklch(0.7 0.18 15);
-  --social-media: oklch(0.8 0.15 85);
-  --data-extraction: oklch(0.7 0.2 35);
-  --file-converters: oklch(0.75 0.12 220);
-  --productivity: oklch(0.7 0.25 330);
+  /* Category accent colors for dark mode - slightly more vibrant */
+  --job-application: oklch(0.75 0.15 15);
+  --social-media: oklch(0.85 0.12 85);
+  --data-extraction: oklch(0.75 0.18 35);
+  --file-converters: oklch(0.8 0.1 220);
+  --productivity: oklch(0.75 0.2 330);
 
-  --sidebar: oklch(0.1 0.02 240);
-  --sidebar-foreground: oklch(0.95 0 0);
-  --sidebar-primary: oklch(0.75 0.12 220);
-  --sidebar-primary-foreground: oklch(0.08 0.02 240);
-  --sidebar-accent: oklch(0.18 0.02 240);
-  --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(0.18 0.02 240);
-  --sidebar-ring: oklch(0.65 0.15 220);
+  --sidebar: oklch(0.16 0.015 240); /* Slightly deeper shade for sidebar to provide depth */
+  --sidebar-foreground: oklch(0.9 0.005 240);
+  --sidebar-primary: oklch(0.8 0.1 220);
+  --sidebar-primary-foreground: oklch(0.15 0.015 240);
+  --sidebar-accent: oklch(0.23 0.015 240);
+  --sidebar-accent-foreground: oklch(0.92 0.005 240);
+  --sidebar-border: oklch(0.24 0.015 240);
+  --sidebar-ring: oklch(0.7 0.1 220);
 }
 
 @theme inline {

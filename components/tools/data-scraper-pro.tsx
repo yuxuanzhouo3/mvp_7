@@ -161,390 +161,341 @@ export function DataScraperPro() {
     return [headers, ...rows].map((row) => row.join(",")).join("\n")
   }
 
+  const getStatusBadgeVariant = (status: ScrapingJob['status']) => {
+    switch(status) {
+      case 'completed': return 'default'
+      case 'running': return 'secondary'
+      case 'error': return 'destructive'
+      default: return 'outline'
+    }
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-l-[color:var(--data-extraction)]">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Database className="w-5 h-5 text-[color:var(--data-extraction)]" />
-              <CardTitle className="text-lg">{tr("jobs")}</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{jobs.length}</div>
-            <p className="text-sm text-muted-foreground">{tr("activeJobs")}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-blue-500">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Search className="w-5 h-5 text-blue-500" />
-              <CardTitle className="text-lg">{tr("dataFound")}</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{scrapedData.length}</div>
-            <p className="text-sm text-muted-foreground">{tr("results")}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-green-500">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-500" />
-              <CardTitle className="text-lg">Status</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{jobs.filter((j) => j.status === "completed").length}</div>
-            <p className="text-sm text-muted-foreground">{tr("completed")}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-purple-500">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <Globe className="w-5 h-5 text-purple-500" />
-              <CardTitle className="text-lg">{tr("sources")}</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{new Set(scrapedData.map((d) => d.source)).size}</div>
-            <p className="text-sm text-muted-foreground">{tr("uniqueWebsites")}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="scraper" className="space-y-6">
-        <div className="overflow-x-auto pb-1 scrollbar-hide">
-          <TabsList className="flex w-max min-w-full md:grid md:grid-cols-4">
-            <TabsTrigger value="scraper" className="px-4">{tr("scraper")}</TabsTrigger>
-            <TabsTrigger value="jobs" className="px-4">{tr("jobs")}</TabsTrigger>
-            <TabsTrigger value="data" className="px-4">{tr("data")}</TabsTrigger>
-            <TabsTrigger value="settings" className="px-4">{tr("settings")}</TabsTrigger>
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="lg:col-span-8 space-y-6">
+        <Tabs defaultValue="scraper" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="scraper">{tr("scraper")}</TabsTrigger>
+            <TabsTrigger value="data">{tr("data")}</TabsTrigger>
+            <TabsTrigger value="settings">{tr("settings")}</TabsTrigger>
           </TabsList>
-        </div>
 
-        <TabsContent value="scraper" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Globe className="w-5 h-5" />
-                {tr("webScraper")}
-              </CardTitle>
-              <CardDescription>{tr("extractDataFromWebsites")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="job-name">{tr("jobName")}</Label>
-                  <Input
-                    id="job-name"
-                    value={currentJob.name || ""}
-                    onChange={(e) => setCurrentJob((prev) => ({ ...prev, name: e.target.value }))}
-                    placeholder={tr("myScrappingJob")}
-                  />
+          <TabsContent value="scraper" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="w-5 h-5" />
+                  {tr("webScraper")}
+                </CardTitle>
+                <CardDescription>{tr("extractDataFromWebsites")}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="p-6 border-2 border-dashed rounded-lg bg-muted/10 space-y-4">
+                  <div className="space-y-2">
+                     <Label className="text-base font-medium flex items-center gap-2">
+                       <LinkIcon className="w-4 h-4 text-primary" /> {tr("targetUrl")}
+                     </Label>
+                     <div className="flex gap-2">
+                       <Input
+                          id="target-url"
+                          value={currentJob.url || ""}
+                          onChange={(e) => setCurrentJob((prev) => ({ ...prev, url: e.target.value }))}
+                          placeholder="https://example.com"
+                          className="h-10 font-mono text-sm"
+                        />
+                     </div>
+                     <p className="text-xs text-muted-foreground pl-1">Starting point for the scraping job.</p>
+                  </div>
+                  
+                  <div className="space-y-2 pt-2">
+                     <Label className="text-sm font-medium">{tr("jobName")} <span className="text-muted-foreground font-normal">(Optional)</span></Label>
+                     <Input
+                        id="job-name"
+                        value={currentJob.name || ""}
+                        onChange={(e) => setCurrentJob((prev) => ({ ...prev, name: e.target.value }))}
+                        placeholder={tr("myScrappingJob")}
+                        className="h-9"
+                      />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="target-url">{tr("targetUrl")}</Label>
-                  <Input
-                    id="target-url"
-                    value={currentJob.url || ""}
-                    onChange={(e) => setCurrentJob((prev) => ({ ...prev, url: e.target.value }))}
-                    placeholder="https://example.com"
-                  />
-                </div>
-              </div>
 
-              <div className="space-y-4">
-                <Label>{tr("dataTypesToExtract")}</Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {dataTypes.map((dataType) => {
-                    const Icon = dataType.icon
-                    const isSelected = selectedDataTypes.includes(dataType.id)
+                <div className="space-y-3">
+                  <Label className="text-base font-medium">{tr("dataTypesToExtract")}</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {dataTypes.map((dataType) => {
+                      const Icon = dataType.icon
+                      const isSelected = selectedDataTypes.includes(dataType.id)
 
-                    return (
-                      <Card
-                        key={dataType.id}
-                        className={`cursor-pointer transition-all ${isSelected ? "ring-2 ring-primary" : ""}`}
-                        onClick={() => handleDataTypeToggle(dataType.id)}
-                      >
-                        <CardHeader className="pb-2">
-                          <div className="flex items-center gap-2">
-                            <Icon className="w-5 h-5 text-primary" />
-                            <CardTitle className="text-sm">{dataType.name}</CardTitle>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <p className="text-xs text-muted-foreground">{dataType.description}</p>
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <Button
-                  onClick={handleStartScraping}
-                  disabled={!currentJob.url || selectedDataTypes.length === 0 || isRunning}
-                  className="flex-1"
-                >
-                  {isRunning ? (
-                    <>
-                      <Pause className="w-4 h-4 mr-2" />
-                      {tr("scraping")}
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 mr-2" />
-                      {tr("startScraping")}
-                    </>
-                  )}
-                </Button>
-                <Button variant="outline">
-                  <Eye className="w-4 h-4 mr-2" />
-                  Preview
-                </Button>
-              </div>
-
-              {!currentJob.url && (
-                <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                  <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-                  <p className="text-sm text-yellow-800 dark:text-yellow-200">Please enter a target URL</p>
-                </div>
-              )}
-
-              {selectedDataTypes.length === 0 && (
-                <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                  <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                    Select at least one data type to extract
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="jobs" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Database className="w-5 h-5" />
-                {tr("jobs")}
-              </CardTitle>
-              <CardDescription>{t(language, "tools.dataScraper.description")}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {jobs.length === 0 ? (
-                <div className="text-center py-8">
-                  <Database className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium mb-2">{tr("noJobsYet")}</h3>
-                  <p className="text-muted-foreground">{tr("startAScrapingJob")}</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {jobs.map((job) => (
-                    <div key={job.id} className="p-4 border rounded-lg">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="font-medium">{job.name}</h3>
-                          <p className="text-sm text-muted-foreground">{job.url}</p>
-                        </div>
-                        <Badge
-                          variant={
-                            job.status === "completed"
-                              ? "default"
-                              : job.status === "running"
-                                ? "secondary"
-                                : job.status === "error"
-                                  ? "destructive"
-                                  : "outline"
-                          }
+                      return (
+                        <div
+                          key={dataType.id}
+                          className={`
+                            cursor-pointer rounded-lg border p-3 flex items-start gap-3 transition-all hover:bg-muted/50
+                            ${isSelected ? "border-primary bg-primary/5 ring-1 ring-primary" : ""}
+                          `}
+                          onClick={() => handleDataTypeToggle(dataType.id)}
                         >
-                          {tr(job.status)}
-                        </Badge>
-                      </div>
+                          <div className={`p-2 rounded-md ${isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium leading-none">{dataType.name}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-1">{dataType.description}</p>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
 
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span>{tr("progress")}</span>
-                          <span>{job.progress}%</span>
-                        </div>
-                        <Progress value={job.progress} className="w-full" />
-                      </div>
+                {selectedDataTypes.length === 0 && (
+                  <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-sm text-yellow-800 dark:text-yellow-200">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>Select at least one data type to extract</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-                      <div className="flex items-center justify-between mt-3">
-                        <div className="flex items-center gap-2">
-                          {job.dataTypes.map((type) => {
-                            const dataType = dataTypes.find((dt) => dt.id === type)
-                            if (!dataType) return null
-                            const Icon = dataType.icon
-                            return <Icon key={type} className="w-4 h-4 text-muted-foreground" />
-                          })}
-                          <span className="text-sm text-muted-foreground">{job.results} {tr("results")}</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Download className="w-4 h-4" />
-                          </Button>
-                        </div>
+          <TabsContent value="data" className="space-y-4">
+            <Card className="h-[600px] flex flex-col">
+              <CardHeader className="pb-3 border-b">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Database className="w-5 h-5" />
+                      {tr("dataFound")}
+                    </CardTitle>
+                    <CardDescription>{scrapedData.length} records extracted</CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => exportData("csv")} disabled={scrapedData.length === 0}>
+                      <Download className="w-4 h-4 mr-2" />
+                      CSV
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => exportData("json")} disabled={scrapedData.length === 0}>
+                      <Download className="w-4 h-4 mr-2" />
+                      JSON
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 overflow-hidden p-0">
+                {scrapedData.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-8 text-muted-foreground">
+                    <div className="bg-muted/30 p-4 rounded-full mb-4">
+                        <Search className="w-8 h-8 opacity-40" />
+                    </div>
+                    <h3 className="text-lg font-medium mb-1">No data extracted yet</h3>
+                    <p className="text-sm">Run a scraping job to see extracted data here</p>
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col">
+                    <div className="p-4 border-b bg-muted/5 flex items-center gap-4">
+                      <Select defaultValue="all">
+                        <SelectTrigger className="w-[180px] h-9">
+                          <SelectValue placeholder="Filter by type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Types</SelectItem>
+                          <SelectItem value="email">Email Addresses</SelectItem>
+                          <SelectItem value="phone">Phone Numbers</SelectItem>
+                          <SelectItem value="names">Names</SelectItem>
+                          <SelectItem value="companies">Companies</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <div className="relative flex-1">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input placeholder="Search within results..." className="pl-9 h-9" />
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
 
-        <TabsContent value="data" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Search className="w-5 h-5" />
-                    {tr("dataFound")}
-                  </CardTitle>
-                  <CardDescription>{t(language, "tools.dataScraper.description")}</CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => exportData("csv")}>
-                    <Download className="w-4 h-4 mr-2" />
-                    CSV
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => exportData("json")}>
-                    <Download className="w-4 h-4 mr-2" />
-                    JSON
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {scrapedData.length === 0 ? (
-                <div className="text-center py-8">
-                  <Search className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium mb-2">No data extracted yet</h3>
-                  <p className="text-muted-foreground">Run a scraping job to see extracted data here</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <Select defaultValue="all">
-                      <SelectTrigger className="w-48">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Types</SelectItem>
-                        <SelectItem value="email">Email Addresses</SelectItem>
-                        <SelectItem value="phone">Phone Numbers</SelectItem>
-                        <SelectItem value="names">Names</SelectItem>
-                        <SelectItem value="companies">Companies</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input placeholder="Search data..." className="max-w-xs" />
-                  </div>
-
-                  <div className="max-h-96 overflow-y-auto">
-                    <div className="space-y-2">
-                      {scrapedData.map((item, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                          <div className="flex items-center gap-3">
-                            {(() => {
-                              const dataType = dataTypes.find((dt) => dt.id === item.type)
-                              if (!dataType) return null
-                              const Icon = dataType.icon
-                              return <Icon className="w-4 h-4 text-muted-foreground" />
-                            })()}
-                            <div>
-                              <p className="font-medium">{item.value}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {item.type} • {item.confidence}% confidence
-                              </p>
+                    <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                        {scrapedData.map((item, index) => (
+                          <div key={index} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors gap-3">
+                            <div className="flex items-start gap-3 overflow-hidden">
+                              <div className="mt-1 shrink-0">
+                                {(() => {
+                                  const dataType = dataTypes.find((dt) => dt.id === item.type)
+                                  const Icon = dataType?.icon || FileText
+                                  return (
+                                    <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                                       <Icon className="w-4 h-4" />
+                                    </div>
+                                  )
+                                })()}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-sm truncate">{item.value}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <Badge variant="secondary" className="text-[10px] h-4 px-1">{item.type}</Badge>
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                                        <Globe className="w-3 h-3" />
+                                        {new URL(item.source).hostname}
+                                    </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between sm:justify-end gap-4 text-xs text-muted-foreground pl-11 sm:pl-0">
+                                <span className={item.confidence > 80 ? "text-green-600" : "text-yellow-600"}>{item.confidence}% match</span>
+                                <Button variant="ghost" size="icon" className="h-6 w-6">
+                                    <Eye className="w-3 h-3" />
+                                </Button>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-xs text-muted-foreground">{new URL(item.source).hostname}</p>
-                          </div>
-                        </div>
-                      ))}
+                        ))}
                     </div>
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        <TabsContent value="settings" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="w-5 h-5" />
-                {tr("scraperSettings")}
-              </CardTitle>
-              <CardDescription>{tr("configureScrapingBehavior")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label>{tr("respectRobotsTxt")}</Label>
-                    <p className="text-sm text-muted-foreground">{tr("followWebsiteGuidelines")}</p>
+          <TabsContent value="settings" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="w-5 h-5" />
+                  {tr("scraperSettings")}
+                </CardTitle>
+                <CardDescription>{tr("configureScrapingBehavior")}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="bg-muted/20 rounded-lg p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label className="text-base">{tr("respectRobotsTxt")}</Label>
+                      <p className="text-xs text-muted-foreground">{tr("followWebsiteGuidelines")}</p>
+                    </div>
+                    <Switch defaultChecked />
                   </div>
-                  <Switch defaultChecked />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label>{tr("useProxyRotation")}</Label>
-                    <p className="text-sm text-muted-foreground">{tr("rotateIPAddresses")}</p>
+                  <div className="flex items-center justify-between">
+                     <div className="space-y-1">
+                        <Label className="text-base">{tr("useProxyRotation")}</Label>
+                        <p className="text-xs text-muted-foreground">{tr("rotateIPAddresses")}</p>
+                     </div>
+                     <Switch />
                   </div>
-                  <Switch />
                 </div>
 
-                <div className="space-y-2">
-                  <Label>{tr("requestDelay")}</Label>
-                  <Select defaultValue="2">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">{tr("oneSecond")}</SelectItem>
-                      <SelectItem value="2">{tr("twoSeconds")}</SelectItem>
-                      <SelectItem value="5">{tr("fiveSeconds")}</SelectItem>
-                      <SelectItem value="10">{tr("tenSeconds")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">{tr("delayBetweenRequests")}</p>
-                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{tr("requestDelay")}</Label>
+                      <Select defaultValue="2">
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">{tr("oneSecond")}</SelectItem>
+                          <SelectItem value="2">{tr("twoSeconds")}</SelectItem>
+                          <SelectItem value="5">{tr("fiveSeconds")}</SelectItem>
+                          <SelectItem value="10">{tr("tenSeconds")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">{tr("delayBetweenRequests")}</p>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label>{tr("maxPagesPerJob")}</Label>
-                  <Select defaultValue="100">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">{tr("tenPages")}</SelectItem>
-                      <SelectItem value="50">{tr("fiftyPages")}</SelectItem>
-                      <SelectItem value="100">{tr("hundredPages")}</SelectItem>
-                      <SelectItem value="500">{tr("fiveHundredPages")}</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    <div className="space-y-2">
+                      <Label>{tr("maxPagesPerJob")}</Label>
+                      <Select defaultValue="100">
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="10">{tr("tenPages")}</SelectItem>
+                          <SelectItem value="50">{tr("fiftyPages")}</SelectItem>
+                          <SelectItem value="100">{tr("hundredPages")}</SelectItem>
+                          <SelectItem value="500">{tr("fiveHundredPages")}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">Limit pages to prevent over-usage.</p>
+                    </div>
                 </div>
-              </div>
-            </CardContent>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      <div className="lg:col-span-4 space-y-6">
+          {/* Status Card */}
+          <Card className="shadow-lg border-t-4 border-t-primary sticky top-6">
+              <CardHeader className="pb-3 border-b bg-muted/20">
+                  <CardTitle className="text-lg flex items-center justify-between">
+                      {tr("activeJobs")}
+                      <Badge variant="secondary">{isRunning ? 'Running' : 'Ready'}</Badge>
+                  </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-6">
+                 {/* Overall Stats */}
+                 <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-muted/30 p-3 rounded-lg text-center border">
+                        <span className="block text-2xl font-bold">{scrapedData.length}</span>
+                        <span className="text-[10px] uppercase text-muted-foreground font-semibold">items found</span>
+                    </div>
+                    <div className="bg-muted/30 p-3 rounded-lg text-center border">
+                        <span className="block text-2xl font-bold">{jobs.length}</span>
+                        <span className="text-[10px] uppercase text-muted-foreground font-semibold">jobs run</span>
+                    </div>
+                 </div>
+
+                 <div className="space-y-1">
+                    <Button 
+                        size="lg" 
+                        className="w-full h-12 text-lg shadow-sm"
+                        onClick={handleStartScraping}
+                        disabled={!currentJob.url || selectedDataTypes.length === 0 || isRunning}
+                    >
+                        {isRunning ? (
+                            <>
+                            <Pause className="w-5 h-5 mr-2" />
+                            {tr("scraping")}
+                            </>
+                        ) : (
+                            <>
+                            <Play className="w-5 h-5 mr-2" />
+                            {tr("startScraping")}
+                            </>
+                        )}
+                    </Button>
+                    {!currentJob.url && !isRunning && (
+                       <p className="text-xs text-center text-muted-foreground pt-2">Enter a URL to start scraping</p>
+                    )}
+                 </div>
+
+                 {/* Recent Jobs List */}
+                 <div className="space-y-3 pt-2">
+                     <h4 className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-2">
+                        <Database className="w-3 h-3" /> Recent Activity
+                     </h4>
+                     {jobs.length === 0 ? (
+                        <div className="text-sm text-muted-foreground text-center py-4 italic border-t border-dashed">
+                           No jobs run yet
+                        </div>
+                     ) : (
+                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                           {[...jobs].reverse().slice(0, 5).map(job => (
+                              <div key={job.id} className="p-3 border rounded-md text-sm bg-background hover:bg-muted/20 transition-colors">
+                                  <div className="flex items-center justify-between mb-2">
+                                     <span className="font-medium truncate max-w-[120px]">{job.name}</span>
+                                     <Badge variant={getStatusBadgeVariant(job.status)} className="text-[10px] h-5 px-1.5">{job.status}</Badge>
+                                  </div>
+                                  <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden mb-2">
+                                      <div className="bg-primary h-full transition-all duration-500" style={{width: `${job.progress}%`}} />
+                                  </div>
+                                  <div className="flex justify-between text-xs text-muted-foreground">
+                                      <span className="truncate max-w-[140px]">{new URL(job.url).hostname}</span>
+                                      <span>{job.results} items</span>
+                                  </div>
+                              </div>
+                           ))}
+                        </div>
+                     )}
+                 </div>
+              </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+      </div>
     </div>
   )
 }

@@ -31,6 +31,7 @@ export function Dashboard() {
   const [showFeatureModal, setShowFeatureModal] = useState(false);
   const [selectedToolName, setSelectedToolName] = useState("");
   const [showMobileSearch, setShowMobileSearch] = useState(false)
+  const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null)
 
   // Detect deployment region
   const deploymentRegion = (process.env.NEXT_PUBLIC_DEPLOYMENT_REGION || 'CN').toUpperCase()
@@ -41,6 +42,13 @@ export function Dashboard() {
     const saved = localStorage.getItem("recentTools")
     if (saved) {
       setRecentTools(JSON.parse(saved))
+    }
+
+    const pendingAuthError = sessionStorage.getItem('auth_error')
+    if (pendingAuthError) {
+      setAuthErrorMessage(pendingAuthError)
+      setShowLoginModal(true)
+      sessionStorage.removeItem('auth_error')
     }
   }, [isChinaRegion])
 
@@ -54,7 +62,7 @@ export function Dashboard() {
     // Check if tool is uncompleted
     const uncompletedTools = ["text-multi-sender", "social-auto-poster"]
     if (uncompletedTools.includes(toolId)) {
-      const toolName = tools.find((t) => t.id === toolId)?.name || toolId
+      const toolName = (tools.find((t) => t.id === toolId) as any)?.name || toolId
       setSelectedToolName(toolName)
       setShowFeatureModal(true)
       return
@@ -73,14 +81,93 @@ export function Dashboard() {
     alert(t.errors.promptForExceedingUsage)
   }
 
-  const featureEmail = isChinaRegion ? 'morntool@sina.cn' : 'morntool@gmail.com'
+  const featureEmail = 'mornscience@gmail.com'
 
-  const signIn = async (email: string, password: string) => {
+  const syncSupabaseProfile = async (sessionUser: any) => {
+    const userId = sessionUser?.id
+    const email = sessionUser?.email
+
+    if (!userId || !email) {
+      return null
+    }
+
+    const fullName =
+      sessionUser?.user_metadata?.full_name ||
+      sessionUser?.user_metadata?.name ||
+      (email ? email.split('@')[0] : undefined)
+
+    const avatarUrl =
+      sessionUser?.user_metadata?.avatar_url ||
+      sessionUser?.user_metadata?.picture
+
+    try {
+      const resp = await fetch('/api/auth/supabase-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, email, fullName, avatarUrl })
+      })
+
+      const result = await resp.json()
+      if (resp.ok && result?.user) {
+        return {
+          ...result.user,
+          name: result.user.full_name || fullName || email.split('@')[0],
+          pro: sessionUser?.user_metadata?.pro || false,
+          region: 'overseas',
+        }
+      }
+    } catch (error: any) {
+      console.warn('Failed to sync supabase profile:', error)
+    }
+
+    return {
+      id: userId,
+      email,
+      name: fullName || email.split('@')[0],
+      full_name: fullName || email.split('@')[0],
+      avatar_url: avatarUrl || null,
+      credits: 300,
+      subscription_tier: 'free',
+      pro: sessionUser?.user_metadata?.pro || false,
+      region: 'overseas',
+    }
+  }
+
+  const signIn = async (email: string, password: string, verificationCode?: string, privacyAccepted?: boolean) => {
+    if (!isChinaRegion) {
+      try {
+        const { data, error } = await getSupabaseClient().auth.signInWithPassword({
+          email,
+          password,
+        })
+
+        if (error) {
+          return { success: false, error: error.message }
+        }
+
+        if (!data?.user) {
+          return { success: false, error: 'Login failed' }
+        }
+
+        const profileUser = await syncSupabaseProfile(data.user)
+        if (!profileUser) {
+          return { success: false, error: 'Failed to load profile' }
+        }
+
+        localStorage.setItem("user", JSON.stringify(profileUser))
+        updateUser(profileUser)
+        return { success: true, user: profileUser }
+      } catch (error: any) {
+        console.error('login error:' + error?.message)
+        return { success: false, error: error?.message || 'Authentication failed' }
+      }
+    }
+
     try {
       const response = await fetch('/api/auth/email', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "login", email, password }),
+        body: JSON.stringify({ action: "login", email, password, verificationCode, privacyAccepted }),
       });
 
       const data = await response.json();
@@ -91,9 +178,9 @@ export function Dashboard() {
       localStorage.setItem("app-auth-state", JSON.stringify(data));
       updateUser(data.user);
       return { success: true, user: data.user };
-    } catch (error) {
-      console.error('login error:' + error.message)
-      return { error: 'Authentication failed' }
+    } catch (error: any) {
+      console.error('login error:' + error?.message)
+      return { success: false, error: error?.message || 'Authentication failed' }
     }
   }
 
@@ -108,12 +195,13 @@ export function Dashboard() {
       const data = await response.json()
       if (data.success && data.authUrl) {
         window.location.href = data.authUrl
+        return { success: true }
       } else {
-        alert(t.notifications.wechatLoginFailed)
+        return { success: false, error: (t as any)?.notifications?.wechatLoginFailed || "WeChat login failed" }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('微信登录错误:', error)
-      alert(t.notifications.wechatLoginFailed)
+      return { success: false, error: error?.message || (t as any)?.notifications?.wechatLoginFailed || "WeChat login failed" }
     }
   }
 
@@ -125,8 +213,7 @@ export function Dashboard() {
       });
 
       if (error) {
-        alert(t.notifications.googleLoginError.replace('{error}', error.message || ''));
-        return { success: false, error: error.message };
+        return { success: false, error: error?.message || 'Google login failed' };
       }
 
       if (data?.url) {
@@ -135,32 +222,145 @@ export function Dashboard() {
       }
 
       return { success: false, error: 'No redirect URL returned from provider' };
-    } catch (error) {
-      console.error('Google login error:', error.message);
-      alert(t.notifications.googleLoginError.replace('{error}', error.message || ''));
-      return { success: false, error: error.message };
+    } catch (error: any) {
+      console.error('Google login error:', error?.message);
+      return { success: false, error: error?.message || 'Google login failed' };
     }
   };
 
-  const registerUser = async (email: string, password: string, username: string, fullName: string) => {
+  const handleForgotPassword = async (email: string, verificationCode?: string, newPassword?: string) => {
+    if (!email) {
+      return {
+        success: false,
+        error: t.auth?.enterEmail || 'Please enter your email address',
+      }
+    }
+
+    if (isChinaRegion) {
+      if (!verificationCode || !/^\d{6}$/.test(String(verificationCode))) {
+        return {
+          success: false,
+          error: '请输入6位邮箱验证码',
+        }
+      }
+
+      if (!newPassword || newPassword.length < 6) {
+        return {
+          success: false,
+          error: '密码至少6位',
+        }
+      }
+
+      try {
+        const response = await fetch('/api/auth/email-reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, verificationCode, newPassword }),
+        })
+
+        const data = await response.json()
+        if (!response.ok || data?.error) {
+          return {
+            success: false,
+            error: data?.error || '重置密码失败，请稍后重试',
+          }
+        }
+
+        return {
+          success: true,
+          message: data?.message || '密码重置成功，请使用新密码登录',
+        }
+      } catch (error: any) {
+        return {
+          success: false,
+          error: error?.message || '重置密码失败，请稍后重试',
+        }
+      }
+    }
+
+    try {
+      const { error } = await getSupabaseClient().auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      })
+
+      if (error) {
+        return {
+          success: false,
+          error: error.message || t.auth?.sendOtpFailed || 'Failed to send reset email',
+        }
+      }
+
+      return {
+        success: true,
+        message: t.auth?.otpSent || 'Password reset email has been sent.',
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error?.message || t.auth?.sendOtpFailed || 'Failed to send reset email',
+      }
+    }
+  }
+
+
+  const registerUser = async (email: string, password: string, verificationCode?: string, privacyAccepted?: boolean) => {
     if (!isChinaRegion) {
       const passwordValidation = passwordSecurity.validatePassword(password);
       if (!passwordValidation.isValid) {
         return { success: false, error: passwordValidation.feedback }
       }
+
+      try {
+        const { data, error } = await getSupabaseClient().auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: email.split('@')[0],
+              region: 'overseas',
+            },
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
+        })
+
+        if (error) {
+          return { success: false, error: error.message }
+        }
+
+        if (data.user && data.session) {
+          const profileUser = await syncSupabaseProfile(data.user)
+          if (profileUser) {
+            localStorage.setItem("user", JSON.stringify(profileUser))
+            updateUser(profileUser)
+            return { success: true, user: profileUser }
+          }
+        }
+
+        return {
+          success: true,
+          user: data.user,
+        }
+      } catch (error: any) {
+        console.error('注册异常:', error?.message)
+        return { success: false, error: error?.message || 'Registration failed' }
+      }
     }
+
     try {
       const response = await fetch('/api/auth/email', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "signup", email, password }),
+        body: JSON.stringify({ action: "signup", email, password, verificationCode, privacyAccepted }),
       });
 
       const data = await response.json();
+      if (!response.ok || data?.error) {
+        return { success: false, error: data?.error || 'Registration failed' }
+      }
       return { success: true, user: data.user };
-    } catch (error) {
-      console.error('注册异常:', error.message);
-      return { success: false, error: error.message };
+    } catch (error: any) {
+      console.error('注册异常:', error?.message);
+      return { success: false, error: error?.message || 'Registration failed' };
     }
   };
 
@@ -173,6 +373,10 @@ export function Dashboard() {
         setShowLoginModal={setShowLoginModal}
         showMobileSearch={showMobileSearch}
         setShowMobileSearch={setShowMobileSearch}
+        selectedCategory={selectedCategory}
+        setSelectedCategory={setSelectedCategory}
+        favorites={favorites}
+        recentTools={recentTools}
       />
 
       <div className="container mx-auto px-4 md:px-6 py-6 md:py-8">
@@ -200,19 +404,36 @@ export function Dashboard() {
           />
         </div>
 
-        {/* ICP Filing Section (CN Only) - Only visible when DEPLOYMENT_REGION is CN */}
-        {isChinaRegion && (
-          <div className="mt-6 py-3 border-t border-border/20 text-center">
+        <div className="mt-6 py-3 border-t border-border/20 text-center space-y-2">
+          <div className="flex items-center justify-center gap-3">
             <a
-              href="https://beian.miit.gov.cn/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[10px] text-muted-foreground/50 hover:text-primary transition-colors inline-flex items-center gap-1 mt-1"
+              href="/privacy"
+              className="text-xs text-muted-foreground/80 hover:text-primary transition-colors inline-flex items-center gap-1"
             >
-              粤ICP备2024281756号-3
+              {language === 'zh' ? '隐私政策' : 'Privacy Policy'}
+            </a>
+            <span className="text-xs text-muted-foreground/40">|</span>
+            <a
+              href="/support"
+              className="text-xs text-muted-foreground/80 hover:text-primary transition-colors inline-flex items-center gap-1"
+            >
+              {language === 'zh' ? '客服支持' : 'Support'}
             </a>
           </div>
-        )}
+
+          {isChinaRegion && (
+            <div>
+              <a
+                href="https://beian.miit.gov.cn/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] text-muted-foreground/50 hover:text-primary transition-colors inline-flex items-center gap-1 mt-1"
+              >
+                粤ICP备2024281756号-3
+              </a>
+            </div>
+          )}
+        </div>
       </div>
 
       <AuthModal
@@ -229,8 +450,29 @@ export function Dashboard() {
         signIn={signIn}
         signInWithGoogle={signInWithGoogle}
         handleWeChatLogin={handleWeChatLogin}
+        handleForgotPassword={handleForgotPassword}
         registerUser={registerUser}
+        requestEmailCode={async (email: string, action: 'signup' | 'reset') => {
+          try {
+            const response = await fetch('/api/auth/email-code', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, action }),
+            })
+
+            const data = await response.json()
+            if (!response.ok || data?.error) {
+              return { success: false, error: data?.error || t.auth?.sendOtpFailed || '发送验证码失败' }
+            }
+
+            return { success: true, message: data?.message || t.auth?.otpSent || '验证码已发送' }
+          } catch (error: any) {
+            return { success: false, error: error?.message || t.auth?.sendOtpFailed || '发送验证码失败' }
+          }
+        }}
         isChinaRegion={isChinaRegion}
+        externalError={authErrorMessage}
+        onExternalErrorConsumed={() => setAuthErrorMessage(null)}
       />
 
       <FeatureModal

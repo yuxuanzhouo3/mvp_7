@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
-import { Upload, Mail, Users, FileText, Send, Clock, CheckCircle, AlertCircle, Eye, Settings, Plus, Trash2 } from "lucide-react"
+import { Upload, Mail, Users, FileText, Send, Clock, CheckCircle, AlertCircle, Eye, Settings, Plus, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 
 interface EmailTemplate {
@@ -44,6 +44,9 @@ interface SmtpConfig {
 export function EmailMultiSender() {
   const { language } = useLanguage();
   const t  = useTranslations(language)
+
+  const formatWithCount = (template: string | undefined, count: number) =>
+    (template || "{count}").replace("{count}", String(count))
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string>("")
   const [customSubject, setCustomSubject] = useState("")
@@ -160,7 +163,7 @@ Best regards,
 
   const handleSendEmails = async () => {
     if (!smtpConfig.host || !smtpConfig.user || !smtpConfig.pass) {
-      alert("Please configure SMTP settings first.")
+      alert(t.emailMultiSender.smtpConfigureFirst || "Please configure SMTP settings first.")
       return
     }
 
@@ -218,7 +221,7 @@ Best regards,
                to: recipient.email,
                subject: subject,
                html: content.replace(/\n/g, '<br/>'), // Simple plain text to HTML
-               fromName: t.emailMultiSender.senderName || "Email Sender Tool"
+               fromName: t.emailMultiSender.senderName || t.emailMultiSender.senderToolName || "Email Sender Tool"
              }
            })
          })
@@ -254,8 +257,8 @@ Best regards,
     }
 
     setIsSending(false)
-    toast.success("Email campaign finished!", {
-      description: `Sent: ${successCount}, Failed: ${failedCount}`,
+    toast.success(t.emailMultiSender.campaignFinished || "Email campaign finished!", {
+      description: `${t.emailMultiSender.sentCount || "Sent"}: ${successCount}, ${t.emailMultiSender.failedCount || "Failed"}: ${failedCount}`,
     })
   }
 
@@ -274,59 +277,32 @@ Best regards,
     })
   }
 
+  const downloadSampleCsv = () => {
+    const headers = "name,email,company,position"
+    const sampleData = "John Doe,john@example.com,Tech Corp,Developer"
+    const csvContent = "data:text/csv;charset=utf-8," + headers + "\n" + sampleData
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement("a")
+    link.setAttribute("href", encodedUri)
+    link.setAttribute("download", `${t.emailMultiSender.sampleCsvName || "sample_recipients"}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const isConfigValid = smtpConfig.host && smtpConfig.user && smtpConfig.pass
+  const isReadyToSend = recipients.length > 0 && selectedTemplate && isConfigValid
+
   return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="border-l-4 border-l-[color:var(--job-application)]">
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-[color:var(--job-application)]" />
-                <CardTitle className="text-lg">{t.emailMultiSender.recipients}</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{recipients.length}</div>
-              <p className="text-sm text-muted-foreground">{t.emailMultiSender.contactsLoaded}</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-blue-500">
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-500" />
-                <CardTitle className="text-lg">{t.emailMultiSender.template}</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{selectedTemplate ? t.emailMultiSender.selected : t.emailMultiSender.none}</div>
-              <p className="text-sm text-muted-foreground">{t.emailMultiSender.campaignStatus}</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-l-4 border-l-green-500">
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-green-500" />
-                <CardTitle className="text-lg">{t.emailMultiSender.status}</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{t.emailMultiSender.ready}</div>
-              <p className="text-sm text-muted-foreground">{t.emailMultiSender.campaignStatus}</p>
-            </CardContent>
-          </Card>
-        </div>
-
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="lg:col-span-8 space-y-6">
         <Tabs defaultValue="recipients" className="space-y-6">
-          <div className="overflow-x-auto pb-1 scrollbar-hide">
-            <TabsList className="flex w-max min-w-full md:grid md:grid-cols-5">
-              <TabsTrigger value="recipients" className="px-4">{t.emailMultiSender.recipients}</TabsTrigger>
-              <TabsTrigger value="configuration" className="px-4">{t.emailMultiSender.configTab}</TabsTrigger>
-              <TabsTrigger value="template" className="px-4">{t.emailMultiSender.template}</TabsTrigger>
-              <TabsTrigger value="settings" className="px-4">{t.emailMultiSender.settingsTab}</TabsTrigger>
-              <TabsTrigger value="send" className="px-4">{t.emailMultiSender.sendTab}</TabsTrigger>
-            </TabsList>
-          </div>
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="recipients">{t.emailMultiSender.recipients}</TabsTrigger>
+            <TabsTrigger value="template">{t.emailMultiSender.template}</TabsTrigger>
+            <TabsTrigger value="configuration">{t.emailMultiSender.configTab}</TabsTrigger>
+            <TabsTrigger value="settings">{t.emailMultiSender.settingsTab}</TabsTrigger>
+          </TabsList>
 
           <TabsContent value="recipients" className="space-y-4">
             <Card>
@@ -339,87 +315,100 @@ Best regards,
               </CardHeader>
               <CardContent className="space-y-6">
                 
-                {/* Manual Add Form */}
-                <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
-                  <h3 className="text-sm font-medium">{t.emailMultiSender.addManually}</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <Input 
-                       placeholder={t.emailMultiSender.placeholderEmail}
-                       value={newRecipient.email}
-                       onChange={(e) => setNewRecipient({...newRecipient, email: e.target.value})}
-                     />
-                     <Input 
-                       placeholder={t.emailMultiSender.placeholderName}
-                       value={newRecipient.name}
-                       onChange={(e) => setNewRecipient({...newRecipient, name: e.target.value})}
-                     />
-                     <Input 
-                       placeholder={t.emailMultiSender.placeholderCompany}
-                       value={newRecipient.company}
-                       onChange={(e) => setNewRecipient({...newRecipient, company: e.target.value})}
-                     />
-                     <Input 
-                       placeholder={t.emailMultiSender.placeholderPosition}
-                       value={newRecipient.position}
-                       onChange={(e) => setNewRecipient({...newRecipient, position: e.target.value})}
-                     />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* File Upload Area */}
+                  <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors">
+                    <div className="bg-primary/10 p-3 rounded-full mb-3">
+                      <Upload className="w-6 h-6 text-primary" />
+                    </div>
+                    <Label htmlFor="csv-upload" className="cursor-pointer text-sm font-medium mb-1 hover:underline">
+                      {t.emailMultiSender.importCsv}
+                    </Label>
+                    <p className="text-xs text-muted-foreground mb-3">.csv file with headers: name, email, company, position</p>
+                    <Input id="csv-upload" type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                    <Button variant="outline" size="sm" onClick={downloadSampleCsv} className="h-7 text-xs">
+                      Download Sample CSV
+                    </Button>
                   </div>
-                  <Button onClick={handleAddRecipient} disabled={!newRecipient.email} size="sm">
-                    <Plus className="w-4 h-4 mr-2" /> {t.emailMultiSender.addRecipient}
-                  </Button>
-                </div>
 
-                <div className="flex items-center justify-between">
-                   <div className="flex items-center gap-2">
-                      <Label htmlFor="csv-upload" className="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground hover:bg-secondary/80 h-9 px-4 py-2">
-                         <Upload className="w-4 h-4 mr-2" /> {t.emailMultiSender.importCsv}
-                      </Label>
-                      <Input id="csv-upload" type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
-                      <p className="text-xs text-muted-foreground ml-2">(.csv with name, email, company columns)</p>
-                   </div>
-                   
-                   {recipients.length > 0 && (
-                      <Button variant="ghost" size="sm" onClick={handleClearRecipients} className="text-red-500 hover:text-red-700">
-                        <Trash2 className="w-4 h-4 mr-2" /> {t.emailMultiSender.clearAll}
-                      </Button>
-                   )}
-                </div>
-
-                {recipients.length > 0 ? (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-medium">{t.emailMultiSender.loadedRecipients}</h3>
-                        <Badge variant="secondary">{recipients.length} {t.emailMultiSender.contacts}</Badge>
+                  {/* Manual Add Form */}
+                  <div className="space-y-3 p-4 border rounded-lg bg-card">
+                    <h3 className="text-sm font-medium flex items-center gap-2">
+                      <Plus className="w-4 h-4" /> {t.emailMultiSender.addManually}
+                    </h3>
+                    <div className="space-y-2">
+                      <Input 
+                        placeholder={t.emailMultiSender.placeholderEmail}
+                        value={newRecipient.email}
+                        onChange={(e) => setNewRecipient({...newRecipient, email: e.target.value})}
+                        className="h-8"
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input 
+                          placeholder={t.emailMultiSender.placeholderName}
+                          value={newRecipient.name}
+                          onChange={(e) => setNewRecipient({...newRecipient, name: e.target.value})}
+                          className="h-8"
+                        />
+                        <Input 
+                          placeholder={t.emailMultiSender.placeholderCompany}
+                          value={newRecipient.company}
+                          onChange={(e) => setNewRecipient({...newRecipient, company: e.target.value})}
+                          className="h-8"
+                        />
                       </div>
-                      <div className="max-h-64 overflow-y-auto space-y-2">
+                      <Button onClick={handleAddRecipient} disabled={!newRecipient.email} size="sm" className="w-full">
+                        {t.emailMultiSender.addRecipient}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {recipients.length > 0 && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between border-b pb-2">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-medium">{t.emailMultiSender.loadedRecipients}</h3>
+                          <Badge variant="secondary">{recipients.length}</Badge>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={handleClearRecipients} className="text-red-500 hover:text-red-700 h-8">
+                          <Trash2 className="w-4 h-4 mr-2" /> {t.emailMultiSender.clearAll}
+                        </Button>
+                      </div>
+                      <div className="max-h-[400px] overflow-y-auto space-y-2 pr-2">
                         {recipients.map((recipient, index) => (
-                            <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                              <div className="flex-1">
-                                <p className="font-medium">{recipient.name}</p>
-                                <p className="text-sm text-muted-foreground">{recipient.email}</p>
-                                {recipient.company && (
-                                    <p className="text-xs text-muted-foreground">
-                                      {recipient.position} at {recipient.company}
+                            <div key={index} className="flex items-center justify-between p-3 bg-muted/40 hover:bg-muted border rounded-lg transition-colors group">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="font-medium text-sm truncate">{recipient.email}</p>
+                                  {recipient.name && <Badge variant="outline" className="text-[10px] h-4 px-1">{recipient.name}</Badge>}
+                                </div>
+                                {(recipient.company || recipient.position) && (
+                                    <p className="text-xs text-muted-foreground truncate">
+                                      {recipient.position} {recipient.position && recipient.company && 'at'} {recipient.company}
                                     </p>
                                 )}
                                 {recipient.error && (
-                                  <p className="text-xs text-red-500 mt-1">Error: {recipient.error}</p>
+                                  <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> {recipient.error}
+                                  </p>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2">
-                                {recipient.status === 'sent' && <CheckCircle className="w-4 h-4 text-green-500" />}
-                                {recipient.status === 'failed' && <AlertCircle className="w-4 h-4 text-red-500" />}
-                                {!recipient.status && <Mail className="w-4 h-4 text-muted-foreground" />}
+                              <div className="flex items-center gap-2 pl-2">
+                                {recipient.status === 'sent' && <Badge variant="default" className="bg-green-500 hover:bg-green-600">Sent</Badge>}
+                                {recipient.status === 'failed' && <Badge variant="destructive">Failed</Badge>}
+                                {!recipient.status && <div className="w-2 h-2 rounded-full bg-slate-300" />}
+                                <Button size="icon" variant="ghost" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => {
+                                  const newRecipients = [...recipients];
+                                  newRecipients.splice(index, 1);
+                                  setRecipients(newRecipients);
+                                }}>
+                                  <X className="w-4 h-4 text-muted-foreground" />
+                                </Button>
                               </div>
                             </div>
                         ))}
                       </div>
-                    </div>
-                ) : (
-                    <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                       <Users className="w-12 h-12 mx-auto mb-2 opacity-20" />
-                       <p>{t.emailMultiSender.noRecipientsYet}</p>
-                       <p className="text-sm">{t.emailMultiSender.addManuallyOrImport}</p>
                     </div>
                 )}
               </CardContent>
@@ -437,70 +426,77 @@ Best regards,
               </CardHeader>
               <CardContent className="space-y-6">
                  {/* Quick Presets */}
-                 <div className="space-y-2">
-                    <Label>{t.emailMultiSender.quickPresets}</Label>
+                 <div className="bg-muted/30 p-4 rounded-lg space-y-3">
+                    <Label className="text-xs uppercase text-muted-foreground font-semibold tracking-wider">{t.emailMultiSender.quickPresets}</Label>
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('gmail')}>{t.emailMultiSender.presetGmail}</Button>
-                      <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('outlook')}>{t.emailMultiSender.presetOutlook}</Button>
-                      <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('qq')}>{t.emailMultiSender.presetQQ}</Button>
-                      <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('163')}>{t.emailMultiSender.preset163}</Button>
+                      <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('gmail')} className="bg-white dark:bg-slate-950">Gmail</Button>
+                      <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('outlook')} className="bg-white dark:bg-slate-950">Outlook</Button>
+                      <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('qq')} className="bg-white dark:bg-slate-950">QQ Mail</Button>
+                      <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('163')} className="bg-white dark:bg-slate-950">163 Mail</Button>
                     </div>
                  </div>
 
-                 <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                       <Label>{t.emailMultiSender.smtpHost}</Label>
-                       <Input 
-                         placeholder="smtp.example.com" 
-                         value={smtpConfig.host}
-                         onChange={(e) => setSmtpConfig({...smtpConfig, host: e.target.value})}
-                       />
+                 <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>{t.emailMultiSender.smtpHost}</Label>
+                          <Input 
+                            placeholder="smtp.example.com" 
+                            value={smtpConfig.host}
+                            onChange={(e) => setSmtpConfig({...smtpConfig, host: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t.emailMultiSender.smtpPort}</Label>
+                          <Input 
+                            placeholder="465" 
+                            value={smtpConfig.port}
+                            onChange={(e) => setSmtpConfig({...smtpConfig, port: e.target.value})}
+                          />
+                        </div>
                     </div>
-                    <div className="space-y-2">
-                       <Label>{t.emailMultiSender.smtpPort}</Label>
-                       <Input 
-                         placeholder="465" 
-                         value={smtpConfig.port}
-                         onChange={(e) => setSmtpConfig({...smtpConfig, port: e.target.value})}
-                       />
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>{t.emailMultiSender.smtpUser}</Label>
+                          <Input 
+                            placeholder="your-email@example.com" 
+                            value={smtpConfig.user}
+                            onChange={(e) => setSmtpConfig({...smtpConfig, user: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t.emailMultiSender.smtpPass}</Label>
+                          <div className="relative">
+                            <Input 
+                              type="password"
+                              placeholder={t.emailMultiSender.smtpHint || "App Password"} 
+                              value={smtpConfig.pass}
+                              onChange={(e) => setSmtpConfig({...smtpConfig, pass: e.target.value})}
+                            />
+                          </div>
+                   
+                        </div>
                     </div>
                  </div>
-
-                 <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                       <Label>{t.emailMultiSender.smtpUser}</Label>
-                       <Input 
-                         placeholder="your-email@example.com" 
-                         value={smtpConfig.user}
-                         onChange={(e) => setSmtpConfig({...smtpConfig, user: e.target.value})}
-                       />
-                    </div>
-                    <div className="space-y-2">
-                       <Label>{t.emailMultiSender.smtpPass}</Label>
-                       <Input 
-                         type="password"
-                         placeholder="App Password (Not login password)" 
-                         value={smtpConfig.pass}
-                         onChange={(e) => setSmtpConfig({...smtpConfig, pass: e.target.value})}
-                       />
-                       <p className="text-xs text-muted-foreground">
-                         {t.emailMultiSender.smtpHint}
-                       </p>
-                    </div>
+                 <div className="text-[12px] text-muted-foreground bg-blue-50 dark:bg-blue-900/20 p-3 rounded text-blue-700 dark:text-blue-300 flex gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{t.emailMultiSender.smtpHint}</span>
                  </div>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="template" className="space-y-4">
-            <Card>
+            <Card className="h-full">
               <CardHeader>
-                <CardTitle>{t.emailMultiSender.emailTemplate}</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    {t.emailMultiSender.emailTemplate}
+                </CardTitle>
                 <CardDescription>{t.emailMultiSender.chooseTemplate}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>{t.emailMultiSender.emailTemplate}</Label>
                   <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
                     <SelectTrigger>
                       <SelectValue placeholder={t.emailMultiSender.chooseTemplatePlaceholder} />
@@ -516,27 +512,9 @@ Best regards,
                   </Select>
                 </div>
 
-                {selectedTemplate && selectedTemplate !== "custom" && (
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label>{t.emailMultiSender.subjectPreview}</Label>
-                        <div className="p-3 bg-muted rounded-lg">
-                          <p className="text-sm">
-                            {templates.find((t) => t.id === selectedTemplate)?.subject.replace(/{(\w+)}/g, "[$1]")}</p>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>{t.emailMultiSender.contentPreview}</Label>
-                        <div className="p-4 bg-muted rounded-lg max-h-64 overflow-y-auto">
-                      <pre className="text-sm whitespace-pre-wrap">
-                        {getTemplateContent(templates.find((t) => t.id === selectedTemplate)!)}</pre>
-                        </div>
-                      </div>
-                    </div>
-                )}
-
-                {selectedTemplate === "custom" && (
-                    <div className="space-y-4">
+                <div className="grid gap-4 pt-4">
+                {selectedTemplate === "custom" ? (
+                    <>
                       <div className="space-y-2">
                         <Label htmlFor="custom-subject">{t.emailMultiSender.subjectLine}</Label>
                         <Input
@@ -548,16 +526,49 @@ Best regards,
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="custom-content">{t.emailMultiSender.emailContent}</Label>
+                        <div className="text-xs text-muted-foreground mb-2 flex flex-wrap gap-2">
+                          <span>Variables:</span>
+                          <Badge variant="outline" className="font-mono text-[10px]">{`{name}`}</Badge>
+                          <Badge variant="outline" className="font-mono text-[10px]">{`{company}`}</Badge>
+                          <Badge variant="outline" className="font-mono text-[10px]">{`{position}`}</Badge>
+                        </div>
                         <Textarea
                             id="custom-content"
                             value={customContent}
                             onChange={(e) => setCustomContent(e.target.value)}
                             placeholder={t.emailMultiSender.enterContent}
-                            rows={10}
+                            className="min-h-[300px] font-mono text-sm leading-relaxed"
                         />
                       </div>
+                    </>
+                ) : selectedTemplate ? (
+                    <div className="space-y-4 border rounded-lg p-4 bg-muted/20">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">{t.emailMultiSender.subjectPreview}</Label>
+                        <p className="font-medium p-2 bg-background rounded border text-sm">
+                          {templates.find((t) => t.id === selectedTemplate)?.subject}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">{t.emailMultiSender.contentPreview}</Label>
+                        <div className="p-3 bg-background rounded border h-[300px] overflow-y-auto">
+                           <pre className="text-sm whitespace-pre-wrap font-sans">
+                              {templates.find((t) => t.id === selectedTemplate)?.content}
+                           </pre>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                         <AlertCircle className="w-3 h-3" />
+                         <span>Select "Custom Template" to edit this content.</span>
+                      </div>
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground border-2 border-dashed rounded-lg bg-muted/30">
+                        <FileText className="w-10 h-10 mb-2 opacity-20" />
+                        <p>Select a template to view or edit</p>
                     </div>
                 )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -572,16 +583,16 @@ Best regards,
                 <CardDescription>{t.emailMultiSender.configureOptions}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/10">
                   <div className="space-y-1">
-                    <Label>{t.emailMultiSender.scheduleSending}</Label>
+                    <Label className="text-base">{t.emailMultiSender.scheduleSending}</Label>
                     <p className="text-sm text-muted-foreground">{t.emailMultiSender.sendAtSpecificTime}</p>
                   </div>
                   <Switch checked={isScheduled} onCheckedChange={setIsScheduled} />
                 </div>
 
                 {isScheduled && (
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg animate-in fade-in slide-in-from-top-2">
                       <div className="space-y-2">
                         <Label htmlFor="schedule-date">{t.emailMultiSender.date}</Label>
                         <Input
@@ -603,119 +614,133 @@ Best regards,
                     </div>
                 )}
 
-                <div className="space-y-4">
+                <div className="space-y-4 p-4 border rounded-lg bg-muted/10">
                   <div className="space-y-2">
-                    <Label>{t.emailMultiSender.sendingRate}</Label>
-                    <Select defaultValue="normal" value={sendingRate} onValueChange={setSendingRate}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="slow">{t.emailMultiSender.slowRate} (5s delay)</SelectItem>
-                        <SelectItem value="normal">{t.emailMultiSender.normalRate} (2s delay)</SelectItem>
-                        <SelectItem value="fast">{t.emailMultiSender.fastRate} (1s delay)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">{t.emailMultiSender.avoidSpam}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="send" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Send className="w-5 h-5" />
-                  {t.emailMultiSender.sendCampaign}
-                </CardTitle>
-                <CardDescription>{t.emailMultiSender.reviewSend}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>{t.emailMultiSender.recipients}</Label>
-                    <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">{recipients.length} {t.emailMultiSender.contacts}</span>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{t.emailMultiSender.template}</Label>
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">
-                      {selectedTemplate === "custom"
-                          ? t.emailMultiSender.customTemplate
-                          : templates.find((t) => t.id === selectedTemplate)?.name || t.emailMultiSender.none}
-                    </span>
+                    <Label className="text-base">{t.emailMultiSender.sendingRate}</Label>
+                    <div className="flex items-center gap-4">
+                        <Select defaultValue="normal" value={sendingRate} onValueChange={setSendingRate}>
+                        <SelectTrigger className="w-[200px]">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="slow">{t.emailMultiSender.slowRate} (5s delay)</SelectItem>
+                            <SelectItem value="normal">{t.emailMultiSender.normalRate} (2s delay)</SelectItem>
+                            <SelectItem value="fast">{t.emailMultiSender.fastRate} (1s delay)</SelectItem>
+                        </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">{t.emailMultiSender.avoidSpam}</p>
                     </div>
                   </div>
                 </div>
-
-                {isSending && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label>{t.emailMultiSender.sendingProgress}</Label>
-                        <span className="text-sm text-muted-foreground">{sendProgress}%</span>
-                      </div>
-                      <Progress value={sendProgress} className="w-full" />
-                      <div className="flex justify-between text-xs text-muted-foreground pt-1">
-                        <span className="text-green-600">Success: {sendStats.success}</span>
-                        <span className="text-red-500">Failed: {sendStats.failed}</span>
-                      </div>
-                    </div>
-                )}
-
-                <div className="flex gap-3">
-                  <Button
-                      onClick={handleSendEmails}
-                      disabled={recipients.length === 0 || !selectedTemplate || isSending}
-                      className="flex-1"
-                  >
-                    {isSending ? (
-                        <>
-                          <Clock className="w-4 h-4 mr-2" />
-                          {t.emailMultiSender.sending}
-                        </>
-                    ) : isScheduled ? (
-                        <>
-                          <Clock className="w-4 h-4 mr-2" />
-                          {t.emailMultiSender.scheduleCampaign}
-                        </>
-                    ) : (
-                        <>
-                          <Send className="w-4 h-4 mr-2" />
-                          {t.emailMultiSender.sendNow}
-                        </>
-                    )}
-                  </Button>
-                  <Button variant="outline">
-                    <Eye className="w-4 h-4 mr-2" />
-                    {t.emailMultiSender.preview}
-                  </Button>
-                </div>
-
-                {recipients.length === 0 && (
-                    <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                      <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-                      <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                        {t.emailMultiSender.uploadRecipientFirst}
-                      </p>
-                    </div>
-                )}
-
-                {!selectedTemplate && (
-                    <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                      <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-                      <p className="text-sm text-yellow-800 dark:text-yellow-200">{t.emailMultiSender.selectTemplateFirst}</p>
-                    </div>
-                )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
+
+      <div className="lg:col-span-4 space-y-6">
+         {/* Summary Status Card */}
+         <Card className="border-t-4 border-t-primary shadow-lg sticky top-6">
+            <CardHeader className="pb-3 border-b bg-muted/20">
+              <CardTitle className="text-lg flex items-center justify-between">
+                <span>{t.emailMultiSender.campaignSummary || "Campaign Summary"}</span>
+                {isSending ? (
+                  <Badge variant="secondary" className="animate-pulse bg-green-100 text-green-700">{t.emailMultiSender.sendingLabel || "Sending..."}</Badge>
+                ) : (
+                  <Badge variant="outline">{t.emailMultiSender.draft || "Draft"}</Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+               {/* Stats */}
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-muted/40 p-3 rounded-lg text-center">
+                     <span className="block text-2xl font-bold">{recipients.length}</span>
+                     <span className="text-xs text-muted-foreground uppercase tracking-wider">{t.emailMultiSender.recipientsLabel || "Recipients"}</span>
+                  </div>
+                  <div className="bg-muted/40 p-3 rounded-lg text-center">
+                     <span className="block text-2xl font-bold text-primary">
+                        {isSending ? sendStats.success + sendStats.failed : 0}
+                     </span>
+                     <span className="text-xs text-muted-foreground uppercase tracking-wider">{t.emailMultiSender.sentLabel || "Sent"}</span>
+                  </div>
+               </div>
+
+               {/* Checklist */}
+               <div className="space-y-3">
+                  <h4 className="text-xs font-semibold uppercase text-muted-foreground">{t.emailMultiSender.readinessChecklist || "Readiness Checklist"}</h4>
+                  
+                  <div className="flex items-center justify-between text-sm">
+                     <span className="flex items-center gap-2">
+                        {recipients.length > 0 ? <CheckCircle className="w-4 h-4 text-green-500" /> : <AlertCircle className="w-4 h-4 text-red-400" />}
+                        {t.emailMultiSender.recipientsLabel || "Recipients"}
+                     </span>
+                     <span className="text-muted-foreground">{formatWithCount(t.emailMultiSender.addedCount, recipients.length)}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                     <span className="flex items-center gap-2">
+                        {selectedTemplate ? <CheckCircle className="w-4 h-4 text-green-500" /> : <AlertCircle className="w-4 h-4 text-red-400" />}
+                        {t.emailMultiSender.templateLabel || t.emailMultiSender.template || "Template"}
+                     </span>
+                     <span className="text-muted-foreground max-w-[100px] truncate block text-right">
+                       {selectedTemplate === 'custom' ? (t.emailMultiSender.custom || "Custom") : templates.find(t=>t.id === selectedTemplate)?.name || (t.emailMultiSender.none || 'None')}
+                     </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-sm">
+                     <span className="flex items-center gap-2">
+                        {isConfigValid ? <CheckCircle className="w-4 h-4 text-green-500" /> : <AlertCircle className="w-4 h-4 text-red-400" />}
+                        {t.emailMultiSender.smtpConfigLabel || "SMTP Config"}
+                     </span>
+                     <span className="text-muted-foreground">{isConfigValid ? (t.emailMultiSender.ready || 'Ready') : (t.emailMultiSender.missing || 'Missing')}</span>
+                  </div>
+               </div>
+
+               {isSending && (
+                  <div className="space-y-2 pt-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium">{t.emailMultiSender.sendingProgressLabel || t.emailMultiSender.sendingProgress || "Sending Progress"}</span>
+                      <span className="text-sm text-muted-foreground">{sendProgress}%</span>
+                    </div>
+                    <Progress value={sendProgress} className="h-2 w-full" />
+                    <div className="flex justify-between text-xs pt-1">
+                       <span className="text-green-600 font-medium">{t.emailMultiSender.sentCount || "Sent"}: {sendStats.success}</span>
+                       <span className="text-red-500 font-medium">{t.emailMultiSender.failedCount || "Failed"}: {sendStats.failed}</span>
+                    </div>
+                  </div>
+               )}
+
+               <div className="pt-2 gap-3 flex flex-col">
+                  <Button 
+                    className="w-full text-lg h-12 shadow-md" 
+                    size="lg" 
+                    disabled={!isReadyToSend || isSending}
+                    onClick={handleSendEmails}
+                  >
+                     {isSending ? (
+                        <>
+                          <Clock className="w-5 h-5 mr-2 animate-spin" />
+                          {t.emailMultiSender.sendingLabel || "Sending..."}
+                        </>
+                    ) : (
+                        <>
+                          <Send className="w-5 h-5 mr-2" />
+                          {isScheduled ? t.emailMultiSender.scheduleCampaign : t.emailMultiSender.sendNow}
+                        </>
+                    )}
+                  </Button>
+                  
+                  {!isReadyToSend && !isSending && (
+                    <p className="text-xs text-center text-red-500 bg-red-50 dark:bg-red-900/10 p-2 rounded">
+                       {!isConfigValid ? (t.emailMultiSender.configureSmtpFirstInline || "Configure SMTP settings first.") : 
+                        recipients.length === 0 ? (t.emailMultiSender.addRecipientsInline || "Add recipients to continue.") : (t.emailMultiSender.selectTemplateInline || "Select a template to continue.")}
+                    </p>
+                  )}
+               </div>
+            </CardContent>
+         </Card>
+      </div>
+    </div>
   )
 }

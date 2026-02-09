@@ -11,6 +11,8 @@ export interface User {
   avatar_url?: string
   credits: number
   subscription_tier: string
+  subscription_expires_at?: string
+  membership_expires_at?: string
 }
 
 export function useUser() {

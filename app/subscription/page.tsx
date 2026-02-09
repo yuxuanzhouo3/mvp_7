@@ -15,7 +15,7 @@ import { Separator } from "@/components/ui/separator"
 import { useUser } from "@/hooks/use-user"
 import Link from "next/link"
 
-const USD_TO_CNY_RATE = 7.2
+const USD_TO_CNY_RATE = 1
 
 export default function SubscriptionPage() {
   const router = useRouter()

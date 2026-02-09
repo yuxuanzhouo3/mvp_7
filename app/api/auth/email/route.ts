@@ -5,6 +5,7 @@ import { getDatabase } from '@/lib/database/cloudbase-service'
 
 import { DEPLOYMENT_REGION } from '@/lib/config/deployment.config'
 import { FREE_USER_INITIAL_CREDITS } from '@/lib/credits/pricing'
+import { verifyChinaEmailVerificationCode } from '@/lib/auth/china-email-code'
 // 服务器端Supabase客户端（无需localStorage）
 
 function createServerClient() {
@@ -176,13 +177,15 @@ async function cloudbaseEmailAuth(email: string, password: string, mode: 'login'
             }
 
             const user = userResult.data[0]
-
             // 验证密码
-            // const isPasswordValid = await bcrypt.compare(password, user.password)
-            // console.log('密码验证结果:', isPasswordValid)
-            // if (!isPasswordValid) {
-            //   return { error: '用户不存在或密码错误' }
-            // }
+            if (!user.password) {
+                return { error: '用户不存在或密码错误' }
+            }
+
+            const isPasswordValid = await bcrypt.compare(password, user.password)
+            if (!isPasswordValid) {
+                return { error: '用户不存在或密码错误' }
+            }
 
             return {
                 user: {
@@ -282,7 +285,15 @@ async function supabaseEmailAuth(email: string, password: string, mode: 'login' 
 
 export async function POST(request: NextRequest) {
     try {
-        const { email, password, action } = await request.json()
+        const { email, password, action, verificationCode, privacyAccepted } = await request.json()
+
+        const authAction = String(action || "") as "login" | "signup"
+        if (!["login", "signup"].includes(authAction)) {
+            return NextResponse.json(
+                { error: "不支持的认证操作" },
+                { status: 400 }
+            )
+        }
 
         if (!email || !password) {
             return NextResponse.json(
@@ -309,10 +320,40 @@ export async function POST(request: NextRequest) {
         let result
         if (DEPLOYMENT_REGION === 'CN') {
             console.log('🔐 [国内IP] 使用CloudBase数据库')
-            result = await cloudbaseEmailAuth(email, password, action as 'login' | 'signup')
+
+            if (privacyAccepted !== true) {
+                return NextResponse.json(
+                    { error: '请先勾选并同意隐私政策' },
+                    { status: 400 }
+                )
+            }
+
+            if (authAction === 'signup') {
+                if (!verificationCode || !/^\d{6}$/.test(String(verificationCode))) {
+                    return NextResponse.json(
+                        { error: '请输入6位邮箱验证码' },
+                        { status: 400 }
+                    )
+                }
+
+                const verifyResult = await verifyChinaEmailVerificationCode({
+                    email,
+                    purpose: 'signup',
+                    code: String(verificationCode),
+                })
+
+                if (!verifyResult.success) {
+                    return NextResponse.json(
+                        { error: verifyResult.error || '验证码错误或已过期，请重新获取' },
+                        { status: 400 }
+                    )
+                }
+            }
+
+            result = await cloudbaseEmailAuth(email, password, authAction)
         } else {
             console.log('🔐 [海外IP] 使用Supabase数据库')
-            result = await supabaseEmailAuth(email, password, action as 'login' | 'signup')
+            result = await supabaseEmailAuth(email, password, authAction)
         }
 
         if (result.error) {

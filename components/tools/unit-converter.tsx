@@ -11,10 +11,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calculator, ArrowRightLeft, Ruler, Weight, Thermometer, Droplets } from "lucide-react"
+import { Calculator, ArrowRightLeft, Ruler, Weight, Thermometer, Droplets, History, Copy, Trash2, Clock } from "lucide-react"
+import { toast } from "sonner"
 
 interface Unit {
   name: string
+  translationKey?: string
   symbol: string
   toBase: number // multiplier to convert to base unit
   fromBase: number // multiplier to convert from base unit
@@ -33,14 +35,14 @@ const unitCategories: UnitCategory[] = [
     icon: Ruler,
     baseUnit: "meter",
     units: [
-      { name: "Millimeter", symbol: "mm", toBase: 0.001, fromBase: 1000 },
-      { name: "Centimeter", symbol: "cm", toBase: 0.01, fromBase: 100 },
-      { name: "Meter", symbol: "m", toBase: 1, fromBase: 1 },
-      { name: "Kilometer", symbol: "km", toBase: 1000, fromBase: 0.001 },
-      { name: "Inch", symbol: "in", toBase: 0.0254, fromBase: 39.3701 },
-      { name: "Foot", symbol: "ft", toBase: 0.3048, fromBase: 3.28084 },
-      { name: "Yard", symbol: "yd", toBase: 0.9144, fromBase: 1.09361 },
-      { name: "Mile", symbol: "mi", toBase: 1609.34, fromBase: 0.000621371 },
+      { name: "Millimeter", translationKey: "millimeter", symbol: "mm", toBase: 0.001, fromBase: 1000 },
+      { name: "Centimeter", translationKey: "centimeter", symbol: "cm", toBase: 0.01, fromBase: 100 },
+      { name: "Meter", translationKey: "meter", symbol: "m", toBase: 1, fromBase: 1 },
+      { name: "Kilometer", translationKey: "kilometer", symbol: "km", toBase: 1000, fromBase: 0.001 },
+      { name: "Inch", translationKey: "inch", symbol: "in", toBase: 0.0254, fromBase: 39.3701 },
+      { name: "Foot", translationKey: "foot", symbol: "ft", toBase: 0.3048, fromBase: 3.28084 },
+      { name: "Yard", translationKey: "yard", symbol: "yd", toBase: 0.9144, fromBase: 1.09361 },
+      { name: "Mile", translationKey: "mile", symbol: "mi", toBase: 1609.34, fromBase: 0.000621371 },
     ],
   },
   {
@@ -48,14 +50,14 @@ const unitCategories: UnitCategory[] = [
     icon: Weight,
     baseUnit: "kilogram",
     units: [
-      { name: "Milligram", symbol: "mg", toBase: 0.000001, fromBase: 1000000 },
-      { name: "Gram", symbol: "g", toBase: 0.001, fromBase: 1000 },
-      { name: "Kilogram", symbol: "kg", toBase: 1, fromBase: 1 },
-      { name: "Pound", symbol: "lb", toBase: 0.453592, fromBase: 2.20462 },
-      { name: "Ounce", symbol: "oz", toBase: 0.0283495, fromBase: 35.274 },
-      { name: "Stone", symbol: "st", toBase: 6.35029, fromBase: 0.157473 },
-      { name: "Ton (Metric)", symbol: "t", toBase: 1000, fromBase: 0.001 },
-      { name: "Ton (US)", symbol: "ton", toBase: 907.185, fromBase: 0.00110231 },
+      { name: "Milligram", translationKey: "milligram", symbol: "mg", toBase: 0.000001, fromBase: 1000000 },
+      { name: "Gram", translationKey: "gram", symbol: "g", toBase: 0.001, fromBase: 1000 },
+      { name: "Kilogram", translationKey: "kilogram", symbol: "kg", toBase: 1, fromBase: 1 },
+      { name: "Pound", translationKey: "pound", symbol: "lb", toBase: 0.453592, fromBase: 2.20462 },
+      { name: "Ounce", translationKey: "ounce", symbol: "oz", toBase: 0.0283495, fromBase: 35.274 },
+      { name: "Stone", translationKey: "stone", symbol: "st", toBase: 6.35029, fromBase: 0.157473 },
+      { name: "Ton (Metric)", translationKey: "tonMetric", symbol: "t", toBase: 1000, fromBase: 0.001 },
+      { name: "Ton (US)", translationKey: "tonUS", symbol: "ton", toBase: 907.185, fromBase: 0.00110231 },
     ],
   },
   {
@@ -63,10 +65,10 @@ const unitCategories: UnitCategory[] = [
     icon: Thermometer,
     baseUnit: "celsius",
     units: [
-      { name: "Celsius", symbol: "°C", toBase: 1, fromBase: 1 },
-      { name: "Fahrenheit", symbol: "°F", toBase: 1, fromBase: 1 },
-      { name: "Kelvin", symbol: "K", toBase: 1, fromBase: 1 },
-      { name: "Rankine", symbol: "°R", toBase: 1, fromBase: 1 },
+      { name: "Celsius", translationKey: "celsius", symbol: "°C", toBase: 1, fromBase: 1 },
+      { name: "Fahrenheit", translationKey: "fahrenheit", symbol: "°F", toBase: 1, fromBase: 1 },
+      { name: "Kelvin", translationKey: "kelvin", symbol: "K", toBase: 1, fromBase: 1 },
+      { name: "Rankine", translationKey: "rankine", symbol: "°R", toBase: 1, fromBase: 1 },
     ],
   },
   {
@@ -74,14 +76,14 @@ const unitCategories: UnitCategory[] = [
     icon: Droplets,
     baseUnit: "liter",
     units: [
-      { name: "Milliliter", symbol: "ml", toBase: 0.001, fromBase: 1000 },
-      { name: "Liter", symbol: "l", toBase: 1, fromBase: 1 },
-      { name: "Gallon (US)", symbol: "gal", toBase: 3.78541, fromBase: 0.264172 },
-      { name: "Gallon (UK)", symbol: "gal", toBase: 4.54609, fromBase: 0.219969 },
-      { name: "Quart (US)", symbol: "qt", toBase: 0.946353, fromBase: 1.05669 },
-      { name: "Pint (US)", symbol: "pt", toBase: 0.473176, fromBase: 2.11338 },
-      { name: "Cup (US)", symbol: "cup", toBase: 0.236588, fromBase: 4.22675 },
-      { name: "Fluid Ounce (US)", symbol: "fl oz", toBase: 0.0295735, fromBase: 33.814 },
+      { name: "Milliliter", translationKey: "milliliter", symbol: "ml", toBase: 0.001, fromBase: 1000 },
+      { name: "Liter", translationKey: "liter", symbol: "l", toBase: 1, fromBase: 1 },
+      { name: "Gallon (US)", translationKey: "gallonUS", symbol: "gal", toBase: 3.78541, fromBase: 0.264172 },
+      { name: "Gallon (UK)", translationKey: "gallonUK", symbol: "gal", toBase: 4.54609, fromBase: 0.219969 },
+      { name: "Quart (US)", translationKey: "quartUS", symbol: "qt", toBase: 0.946353, fromBase: 1.05669 },
+      { name: "Pint (US)", translationKey: "pintUS", symbol: "pt", toBase: 0.473176, fromBase: 2.11338 },
+      { name: "Cup (US)", translationKey: "cupUS", symbol: "cup", toBase: 0.236588, fromBase: 4.22675 },
+      { name: "Fluid Ounce (US)", translationKey: "fluidOunceUS", symbol: "fl oz", toBase: 0.0295735, fromBase: 33.814 },
     ],
   },
 ]
@@ -176,131 +178,128 @@ export function UnitConverter() {
     }
   }
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    toast.success("Copied to clipboard")
+  }
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calculator className="w-5 h-5 text-[color:var(--productivity)]" />
-            {t(language, "tools.unitConverter.name")}
-          </CardTitle>
-          <CardDescription>{t(language, "tools.unitConverter.description")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={selectedCategory} onValueChange={handleCategoryChange}>
-            <TabsList className="grid w-full grid-cols-4">
-              {unitCategories.map((category) => {
-                const Icon = category.icon
-                return (
-                  <TabsTrigger key={category.name} value={category.name} className="gap-2">
-                    <Icon className="w-4 h-4" />
-                    {tr(category.name.toLowerCase())}
-                  </TabsTrigger>
-                )
-              })}
-            </TabsList>
+    <div className="max-w-2xl mx-auto space-y-6">
+      <Tabs value={selectedCategory} onValueChange={handleCategoryChange} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto p-1 bg-muted/50 rounded-xl">
+          {unitCategories.map((category) => {
+            const Icon = category.icon
+            const isSelected = selectedCategory === category.name
+            return (
+              <TabsTrigger
+                key={category.name}
+                value={category.name}
+                className={`gap-2 h-10 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all`}
+              >
+                <Icon className="w-4 h-4" />
+                {tr(category.name.toLowerCase())}
+              </TabsTrigger>
+            )
+          })}
+        </TabsList>
 
-            {unitCategories.map((category) => (
-              <TabsContent key={category.name} value={category.name} className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Input Section */}
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="input-value">{tr("enterValue")}</Label>
-                      <Input
-                        id="input-value"
-                        type="number"
-                        placeholder={tr("enterValue")}
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        className="text-lg"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>{tr("from")}</Label>
-                      <Select value={fromUnit} onValueChange={setFromUnit}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {category.units.map((unit) => (
-                            <SelectItem key={unit.name} value={unit.name}>
-                              {unit.name} ({unit.symbol})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex justify-center">
-                      <Button variant="outline" size="sm" onClick={swapUnits} className="gap-2 bg-transparent">
-                        <ArrowRightLeft className="w-4 h-4" />
-                        {tr("swap")}
-                      </Button>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>{tr("to")}</Label>
-                      <Select value={toUnit} onValueChange={setToUnit}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {category.units.map((unit) => (
-                            <SelectItem key={unit.name} value={unit.name}>
-                              {unit.name} ({unit.symbol})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Result Section */}
-                  <div className="space-y-4">
-                    <div className="p-6 bg-muted/50 rounded-lg text-center">
-                      <div className="text-sm text-muted-foreground mb-2">{tr("result")}</div>
-                      <div className="text-3xl font-bold text-[color:var(--productivity)]">
-                        {result !== null ? formatResult(result) : "---"}
-                      </div>
-                      <div className="text-sm text-muted-foreground mt-1">{toUnitData.symbol}</div>
-                    </div>
-
-                    <div className="p-4 bg-muted/30 rounded-lg">
-                      <div className="text-sm font-medium mb-2">{tr("convert")}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {inputValue || "1"} {fromUnitData.symbol} = {result !== null ? formatResult(result) : "---"}{" "}
-                        {toUnitData.symbol}
-                      </div>
-                    </div>
-
-                    {/* Quick conversions */}
-                    <div className="space-y-2">
-                      <div className="text-sm font-medium">Quick Conversions</div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        {[1, 10, 100, 1000].map((value) => {
-                          const quickResult = convertValue(value, fromUnitData, toUnitData, selectedCategory)
-                          return (
-                            <div key={value} className="p-2 bg-muted/20 rounded text-center">
-                              <div>
-                                {value} {fromUnitData.symbol}
-                              </div>
-                              <div className="text-[color:var(--productivity)]">
-                                {formatResult(quickResult)} {toUnitData.symbol}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  </div>
+        <Card className="border-2 shadow-sm overflow-hidden">
+          <CardHeader className="pb-4 border-b bg-muted/10">
+            <CardTitle className="text-xl flex items-center gap-2">
+              {React.createElement(currentCategory.icon, { className: "w-5 h-5 text-primary" })}
+              {tr(currentCategory.name.toLowerCase())}
+            </CardTitle>
+            <CardDescription>
+              {tr("from")} {tr(fromUnitData.translationKey || fromUnitData.name.toLowerCase())} {tr("to")} {tr(toUnitData.translationKey || toUnitData.name.toLowerCase())}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6 pt-6">
+            {/* Input Row */}
+            <div className="space-y-2">
+              <Label className="text-muted-foreground ml-1" htmlFor="input-val">{tr("enterValue")}</Label>
+              <div className="relative">
+                <Input
+                  id="input-val"
+                  type="number"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  className="h-16 text-3xl font-mono px-4 shadow-sm"
+                  placeholder="0"
+                />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium bg-muted/30 px-2 py-1 rounded">
+                  {fromUnitData.symbol}
                 </div>
-              </TabsContent>
-            ))}
-          </Tabs>
-        </CardContent>
-      </Card>
+              </div>
+            </div>
+
+            {/* Selection Row */}
+            <div className="grid grid-cols-[1fr,auto,1fr] gap-2 sm:gap-4 items-center">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">{tr("from")}</Label>
+                <Select value={fromUnit} onValueChange={setFromUnit}>
+                  <SelectTrigger className="h-12 bg-muted/10 border-0 ring-1 ring-inset ring-border hover:bg-muted/20 transition-colors">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currentCategory.units.map((unit) => (
+                      <SelectItem key={unit.name} value={unit.name}>
+                        <span className="font-medium">{tr(unit.translationKey || unit.name.toLowerCase())}</span>
+                        <span className="ml-2 text-muted-foreground text-xs">({unit.symbol})</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button variant="ghost" size="icon" onClick={swapUnits} className="mt-6 rounded-full hover:bg-muted active:scale-95 transition-all">
+                <ArrowRightLeft className="w-5 h-5" />
+              </Button>
+
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">{tr("to")}</Label>
+                <Select value={toUnit} onValueChange={setToUnit}>
+                  <SelectTrigger className="h-12 bg-muted/10 border-0 ring-1 ring-inset ring-border hover:bg-muted/20 transition-colors">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currentCategory.units.map((unit) => (
+                      <SelectItem key={unit.name} value={unit.name}>
+                        <span className="font-medium">{tr(unit.translationKey || unit.name.toLowerCase())}</span>
+                        <span className="ml-2 text-muted-foreground text-xs">({unit.symbol})</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Result Display */}
+            <div className="bg-primary/5 rounded-2xl p-6 border border-primary/10 relative group transition-all hover:bg-primary/10 hover:shadow-inner">
+              <div className="text-sm font-medium text-muted-foreground mb-1 flex items-center justify-between">
+                <span>{tr("result")}</span>
+                <span className="text-xs bg-background/50 px-2 py-0.5 rounded text-foreground/70">
+                  1 {fromUnitData.symbol} = {formatResult(convertValue(1, fromUnitData, toUnitData, selectedCategory))} {toUnitData.symbol}
+                </span>
+              </div>
+              <div className="text-4xl sm:text-5xl font-bold tracking-tight text-primary truncate pr-12 font-mono" title={result?.toString()}>
+                {result !== null ? formatResult(result) : "---"}
+              </div>
+              <div className="text-lg text-muted-foreground font-medium mt-1">
+                {tr(toUnitData.translationKey || toUnitData.name.toLowerCase())}
+              </div>
+
+              <Button
+                variant="secondary"
+                size="icon"
+                className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => result !== null && copyToClipboard(result.toString())}
+              >
+                <Copy className="w-4 h-4" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </Tabs>
     </div>
   )
 }

@@ -24,10 +24,10 @@ export function getToolCreditCost(toolId: string): number | null {
 }
 
 export const CREDIT_PACKAGES = [
-  { amount: 50, price: 4.99, popular: false },
-  { amount: 100, price: 9.99, popular: true },
-  { amount: 250, price: 22.99, popular: false },
-  { amount: 500, price: 39.99, popular: false },
+  { amount: 50, price: 0.01, popular: false },
+  { amount: 100, price: 0.01, popular: true },
+  { amount: 250, price: 0.01, popular: false },
+  { amount: 500, price: 0.01, popular: false },
 ] as const
 
 export interface MembershipPlan {
@@ -46,8 +46,8 @@ export const MEMBERSHIP_PLANS: MembershipPlan[] = [
     id: "basic",
     name: "Basic",
     tier: "basic",
-    monthly_price: 9.9,
-    yearly_price: 95,
+    monthly_price: 0.01,
+    yearly_price: 0.01,
     credits_per_month: 300,
     features: ["Core tools", "Email support", "Monthly credits refresh"],
   },
@@ -55,8 +55,8 @@ export const MEMBERSHIP_PLANS: MembershipPlan[] = [
     id: "pro",
     name: "Pro",
     tier: "pro",
-    monthly_price: 19.9,
-    yearly_price: 190,
+    monthly_price: 0.01,
+    yearly_price: 0.01,
     credits_per_month: 900,
     features: ["All Basic features", "Priority queue", "Advanced tools"],
     popular: true,
@@ -65,8 +65,8 @@ export const MEMBERSHIP_PLANS: MembershipPlan[] = [
     id: "business",
     name: "Business",
     tier: "business",
-    monthly_price: 49.9,
-    yearly_price: 478,
+    monthly_price: 0.01,
+    yearly_price: 0.01,
     credits_per_month: 2800,
     features: ["All Pro features", "Higher throughput", "Priority support"],
   },

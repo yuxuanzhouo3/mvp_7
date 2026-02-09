@@ -7,16 +7,33 @@ import { getSupabaseClient } from '@/lib/supabase'
 export default function AuthCallback() {
     const router = useRouter()
 
+    const redirectWithError = (message: string) => {
+        sessionStorage.setItem('auth_error', message)
+        router.replace('/')
+    }
+
     useEffect(() => {
         const handleAuthCallback = async () => {
             try {
                 console.log('🔍 [Callback] Starting auth callback processing...')
 
+                const currentUrl = new URL(window.location.href)
+                const code = currentUrl.searchParams.get('code')
+
+                if (code) {
+                    const { error: exchangeError } = await getSupabaseClient().auth.exchangeCodeForSession(code)
+                    if (exchangeError) {
+                        console.error('❌ [Callback] exchangeCodeForSession failed:', exchangeError)
+                        redirectWithError(exchangeError.message || 'Google login failed')
+                        return
+                    }
+                }
+
                 const { data, error } = await getSupabaseClient().auth.getSession()
 
                 if (error) {
                     console.error('❌ [Callback] Auth callback error:', error)
-                    router.push('/?error=auth_failed')
+                    redirectWithError(error.message || 'Google login failed')
                     return
                 }
 
@@ -61,11 +78,11 @@ export default function AuthCallback() {
                 } else {
                     // No session found
                     console.log('⚠️ [Callback] No session found')
-                    router.push('/?error=no_session')
+                    redirectWithError('No session returned from Google login')
                 }
             } catch (error) {
                 console.error('❌ [Callback] Auth callback error:', error)
-                router.push('/?error=auth_failed')
+                redirectWithError('Google login failed, please try again')
             }
         }
 

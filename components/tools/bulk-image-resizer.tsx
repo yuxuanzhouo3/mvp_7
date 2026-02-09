@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
+import { useLanguage } from "@/components/language-provider"
+import { t } from "@/lib/i18n"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -46,6 +48,9 @@ export function BulkImageResizer() {
   const [format, setFormat] = useState("original")
   const [isProcessing, setIsProcessing] = useState(false)
   const picaRef = useRef<Pica | null>(null)
+  
+  const { language } = useLanguage()
+  const tr = (key: string) => t(language, `bulkImageResizer.${key}`)
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newImages = acceptedFiles.map((file) => ({
@@ -279,9 +284,9 @@ export function BulkImageResizer() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5 text-[color:var(--file-converters)]" />
-            Upload Images
+            {tr("uploadTitle")}
           </CardTitle>
-          <CardDescription>Upload multiple images to resize them in bulk</CardDescription>
+          <CardDescription>{tr("uploadDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div
@@ -295,11 +300,11 @@ export function BulkImageResizer() {
             <input {...getInputProps()} />
             <ImageIcon className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
             {isDragActive ? (
-              <p className="text-[color:var(--file-converters)]">Drop the images here...</p>
+              <p className="text-[color:var(--file-converters)]">{tr("dropActive")}</p>
             ) : (
               <div>
-                <p className="text-lg font-medium mb-2">Drop images here or click to upload</p>
-                <p className="text-sm text-muted-foreground">Supports JPEG, PNG, WebP, and GIF formats</p>
+                <p className="text-lg font-medium mb-2">{tr("dropInactive")}</p>
+                <p className="text-sm text-muted-foreground">{tr("supports")}</p>
               </div>
             )}
           </div>
@@ -311,14 +316,14 @@ export function BulkImageResizer() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Settings className="w-5 h-5 text-[color:var(--file-converters)]" />
-            Resize Settings
+            {tr("settingsTitle")}
           </CardTitle>
-          <CardDescription>Configure how you want to resize your images</CardDescription>
+          <CardDescription>{tr("settingsDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Preset Sizes */}
           <div className="space-y-2">
-            <Label>Size Preset</Label>
+            <Label>{tr("sizePreset")}</Label>
             <Select value={selectedPreset} onValueChange={setSelectedPreset}>
               <SelectTrigger>
                 <SelectValue />
@@ -326,7 +331,7 @@ export function BulkImageResizer() {
               <SelectContent>
                 {presetSizes.map((preset) => (
                   <SelectItem key={preset.name} value={preset.name}>
-                    {preset.name} {preset.width > 0 && `(${preset.width} × ${preset.height})`}
+                    {preset.name === "Custom" ? tr("custom") : preset.name} {preset.width > 0 && `(${preset.width} × ${preset.height})`}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -337,7 +342,7 @@ export function BulkImageResizer() {
           {selectedPreset === "Custom" && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="width">Width (px)</Label>
+                <Label htmlFor="width">{tr("width")}</Label>
                 <Input
                   id="width"
                   type="number"
@@ -348,7 +353,7 @@ export function BulkImageResizer() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="height">Height (px)</Label>
+                <Label htmlFor="height">{tr("height")}</Label>
                 <Input
                   id="height"
                   type="number"
@@ -366,28 +371,28 @@ export function BulkImageResizer() {
             <div className="flex items-center space-x-2">
               <Checkbox id="aspect-ratio" checked={maintainAspectRatio} onCheckedChange={setMaintainAspectRatio} />
               <Label htmlFor="aspect-ratio" className="text-sm">
-                Maintain aspect ratio (may crop or add padding)
+                {tr("maintainAspectRatio")}
               </Label>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-3">
-                <Label>Quality: {quality[0]}%</Label>
+                <Label>{tr("quality")}: {quality[0]}%</Label>
                 <Slider value={quality} onValueChange={setQuality} max={100} min={10} step={5} className="w-full" />
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Smaller file</span>
-                  <span>Better quality</span>
+                  <span>{tr("smallerFile")}</span>
+                  <span>{tr("betterQuality")}</span>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Output Format</Label>
+                <Label>{tr("outputFormat")}</Label>
                 <Select value={format} onValueChange={setFormat}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="original">Keep Original</SelectItem>
+                    <SelectItem value="original">{tr("keepOriginal")}</SelectItem>
                     <SelectItem value="jpeg">JPEG</SelectItem>
                     <SelectItem value="png">PNG</SelectItem>
                     <SelectItem value="webp">WebP</SelectItem>
@@ -402,11 +407,11 @@ export function BulkImageResizer() {
             <div className="p-4 bg-muted/50 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <Maximize2 className="w-4 h-4 text-[color:var(--file-converters)]" />
-                <span className="font-medium">Target Size</span>
+                <span className="font-medium">{tr("targetSize")}</span>
               </div>
               <p className="text-sm text-muted-foreground">
                 {targetWidth} × {targetHeight} pixels
-                {maintainAspectRatio && " (with aspect ratio maintained)"}
+                {maintainAspectRatio && ` ${tr("aspectRatioMaintained")}`}
               </p>
             </div>
           )}
@@ -419,13 +424,13 @@ export function BulkImageResizer() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Images to Process ({images.length})</CardTitle>
-                <CardDescription>Review your images before processing</CardDescription>
+                <CardTitle>{tr("imagesToProcess")} ({images.length})</CardTitle>
+                <CardDescription>{tr("reviewImages")}</CardDescription>
               </div>
               {images.some((img) => img.status === "completed") && (
                 <Button onClick={downloadAll} variant="outline" className="gap-2 bg-transparent">
                   <Download className="w-4 h-4" />
-                  Download All
+                  {tr("downloadAll")}
                 </Button>
               )}
             </div>
@@ -454,15 +459,15 @@ export function BulkImageResizer() {
 
                   <div className="flex items-center gap-2">
                     <span className={`text-sm font-medium ${getStatusColor(image.status)}`}>
-                      {image.status === "pending" && "Ready"}
-                      {image.status === "processing" && "Processing..."}
-                      {image.status === "completed" && "Completed"}
+                      {image.status === "pending" && tr("ready")}
+                      {image.status === "processing" && tr("processing")}
+                      {image.status === "completed" && tr("completed")}
                     </span>
 
                     {image.status === "completed" && (
                       <Button variant="outline" size="sm" onClick={() => downloadImage(image)} className="gap-1">
                         <Download className="w-3 h-3" />
-                        Download
+                        {tr("download")}
                       </Button>
                     )}
 
@@ -495,12 +500,12 @@ export function BulkImageResizer() {
           {isProcessing ? (
             <>
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Processing Images...
+              {tr("processing")}
             </>
           ) : (
             <>
               <ImageIcon className="w-4 h-4" />
-              Resize All Images
+              {tr("resizeAll")}
             </>
           )}
         </Button>

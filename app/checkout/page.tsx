@@ -12,10 +12,9 @@ import { Label } from "@/components/ui/label"
 import { Loader2, CreditCard, Wallet, ArrowLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useUser } from "@/hooks/use-user"
-import { getSupabaseClient } from "@/lib/supabase"
 import Link from "next/link"
 
-const USD_TO_CNY_RATE = 7.2
+const USD_TO_CNY_RATE = 1
 
 export default function CheckoutPage() {
   const router = useRouter()
@@ -55,11 +54,16 @@ export default function CheckoutPage() {
 
   const handleSubscriptionUpgrade = async () => {
     if (!user || !selectedPlan) {
-        if (!user) {
-             alert(language === 'zh' ? '请先登录' : 'Please login first');
-             // Consider redirecting to login here
-        }
-        return
+      if (!user) {
+        alert(language === 'zh' ? '请先登录' : 'Please login first')
+      }
+      return
+    }
+
+    const userEmail = user.email
+    if (!userEmail) {
+      alert(language === 'zh' ? '当前账号缺少邮箱信息，请重新登录' : 'Missing user email, please sign in again')
+      return
     }
 
     setIsLoading(true)
@@ -74,46 +78,82 @@ export default function CheckoutPage() {
         return
       }
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1200))
+      const apiPaymentMethod =
+        paymentMethod === 'card'
+          ? 'stripe'
+          : paymentMethod === 'wechatpay'
+          ? 'wechatpay'
+          : paymentMethod
 
-      const creditsToAdd = selectedPlan.credits_per_month
-      const expiresAt = new Date()
-      expiresAt.setMonth(expiresAt.getMonth() + (billingCycle === 'monthly' ? 1 : 12))
-      const nextCredits = Number(user.credits || 0) + creditsToAdd
+      console.log('[checkout] creating payment with method:', apiPaymentMethod)
 
-      if (!isChinaRegion) {
-        const { error } = await getSupabaseClient()
-          .from('user')
-          .update({
-            subscription_tier: selectedPlan.tier,
-            subscription_expires_at: expiresAt.toISOString(),
-            credits: nextCredits,
-          })
-          .eq('id', user.id)
-
-        if (error) throw error
-      }
-
-      updateUser({
-        ...user,
-        subscription_tier: selectedPlan.tier,
-        subscription_expires_at: expiresAt.toISOString(),
-        credits: nextCredits,
+      const response = await fetch('/api/payment/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          paymentMethod: apiPaymentMethod,
+          planId: selectedPlan.id,
+          billingCycle,
+          userEmail,
+          returnUrl: `${window.location.origin}/payment/success?planId=${selectedPlan.id}&cycle=${billingCycle}`,
+          cancelUrl: `${window.location.origin}/payment/cancel?planId=${selectedPlan.id}&cycle=${billingCycle}`,
+        }),
       })
 
-      alert(
-        language === 'zh'
-          ? `已开通 ${selectedPlan.name} 会员（${billingCycle === 'monthly' ? '月付' : '年付'}，每月 ${creditsToAdd} 积分）`
-          : `Subscribed to ${selectedPlan.name} (${billingCycle}, ${creditsToAdd} credits/month)`
-      )
-      
-      // Redirect back to dashboard
-      window.location.href = '/';
+      const result = await response.json()
+
+      if (!response.ok || result?.error) {
+        throw new Error(result?.error || 'Failed to create payment')
+      }
+
+      const redirectUrlRaw = [result?.paymentUrl, result?.url, result?.approvalUrl, result?.qrCodeUrl]
+        .find((item) => typeof item === 'string' && item.trim().length > 0)
+
+      const redirectUrl = typeof redirectUrlRaw === 'string' ? redirectUrlRaw.trim() : ''
+      const paymentFormHtml = typeof result?.paymentFormHtml === 'string' ? result.paymentFormHtml : ''
+
+      if (apiPaymentMethod === 'wechatpay' && result?.orderId) {
+        const qrCode = typeof result?.qrCodeUrl === 'string' ? result.qrCodeUrl.trim() : ''
+        const query = new URLSearchParams({
+          paymentId: String(result.orderId),
+          planId: selectedPlan.id,
+          cycle: billingCycle,
+        })
+        if (qrCode) {
+          query.set('qrCodeUrl', qrCode)
+        }
+        window.location.assign(`/payment/wechat?${query.toString()}`)
+        return
+      }
+
+      if (paymentFormHtml) {
+        const popup = window.open('', '_self')
+        if (!popup) {
+          throw new Error('浏览器拦截了支付跳转，请允许当前站点弹窗后重试')
+        }
+        popup.document.open()
+        popup.document.write(paymentFormHtml)
+        popup.document.close()
+        return
+      }
+
+      if (!redirectUrl) {
+        console.error('Payment create result has no redirect URL:', result)
+        throw new Error('Payment URL not returned')
+      }
+
+      if (!/^https?:\/\//i.test(redirectUrl)) {
+        console.error('Payment create returned non-http URL:', redirectUrl)
+        throw new Error('Invalid payment URL returned')
+      }
+
+      window.location.assign(redirectUrl)
+      return
 
     } catch (error) {
       console.error('Subscription error:', error)
-      alert(t.notifications?.upgradeFailed || 'Upgrade failed')
+      alert((error as any)?.message || 'Upgrade failed')
     } finally {
       setIsLoading(false)
     }
@@ -132,8 +172,8 @@ export default function CheckoutPage() {
     : `$${selectedPrice.toFixed(2)}`
     
   const cycleLabel = isYearly
-    ? (t.payment?.yearLabel || t.payment?.year || "year")
-    : (t.payment?.monthLabel || t.payment?.month || "month")
+    ? ((t.payment as any)?.yearLabel || "year")
+    : ((t.payment as any)?.monthLabel || "month")
 
   return (
     <div className="min-h-screen bg-muted/20 p-4 md:p-8">
@@ -145,12 +185,12 @@ export default function CheckoutPage() {
             </Link>
         </div>
 
-        <h1 className="text-2xl font-bold mb-6">{t.payment?.summary || "Checkout"}</h1>
+        <h1 className="text-2xl font-bold mb-6">{(t.payment as any)?.summary || "Checkout"}</h1>
 
         <div className="grid gap-6 md:grid-cols-1">
             {/* Order Summary Card */}
             <Card className="p-6">
-                <h3 className="font-semibold mb-4 text-lg">{t.payment?.summary || "Order Summary"}</h3>
+                <h3 className="font-semibold mb-4 text-lg">{(t.payment as any)?.summary || "Order Summary"}</h3>
                 
                 <div className="space-y-4">
                     <div className="flex justify-between items-center py-2 border-b">
@@ -182,20 +222,26 @@ export default function CheckoutPage() {
                 <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {isChinaRegion ? (
                     <>
-                        <div className={cn(
+                        <div
+                          onClick={() => setPaymentMethod('wechatpay')}
+                          className={cn(
                             "flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-muted/50 transition-colors relative",
                             paymentMethod === 'wechatpay' && "border-primary bg-primary/5 ring-1 ring-primary"
-                        )}>
+                          )}
+                        >
                         <RadioGroupItem value="wechatpay" id="wechatpay" />
                         <Label htmlFor="wechatpay" className="cursor-pointer flex items-center gap-2 font-medium w-full">
                             <Wallet className="w-4 h-4 text-green-600" />
                             {t.payment?.methods?.wechat?.name || "WeChat Pay"}
                         </Label>
                         </div>
-                        <div className={cn(
+                        <div
+                          onClick={() => setPaymentMethod('alipay')}
+                          className={cn(
                             "flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-muted/50 transition-colors relative",
                             paymentMethod === 'alipay' && "border-primary bg-primary/5 ring-1 ring-primary"
-                        )}>
+                          )}
+                        >
                         <RadioGroupItem value="alipay" id="alipay" />
                         <Label htmlFor="alipay" className="cursor-pointer flex items-center gap-2 font-medium w-full">
                             <Wallet className="w-4 h-4 text-blue-500" />
@@ -205,20 +251,26 @@ export default function CheckoutPage() {
                     </>
                     ) : (
                     <>
-                        <div className={cn(
+                        <div
+                          onClick={() => setPaymentMethod('card')}
+                          className={cn(
                             "flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-muted/50 transition-colors relative",
                             paymentMethod === 'card' && "border-primary bg-primary/5 ring-1 ring-primary"
-                        )}>
+                          )}
+                        >
                         <RadioGroupItem value="card" id="card" />
                         <Label htmlFor="card" className="cursor-pointer flex items-center gap-2 font-medium w-full">
                             <CreditCard className="w-4 h-4" />
                             {t.payment?.methods?.stripe?.name || "Credit Card"}
                         </Label>
                         </div>
-                        <div className={cn(
+                        <div
+                          onClick={() => setPaymentMethod('paypal')}
+                          className={cn(
                             "flex items-center space-x-2 border rounded-lg p-4 cursor-pointer hover:bg-muted/50 transition-colors relative",
                             paymentMethod === 'paypal' && "border-primary bg-primary/5 ring-1 ring-primary"
-                        )}>
+                          )}
+                        >
                         <RadioGroupItem value="paypal" id="paypal" />
                         <Label htmlFor="paypal" className="cursor-pointer flex items-center gap-2 font-medium w-full">
                             <Wallet className="w-4 h-4 text-blue-700" />
@@ -239,7 +291,7 @@ export default function CheckoutPage() {
                         {isLoading ? (
                         <>
                             <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 
-                            {t.common?.processing || "Processing..."}
+                            {(t.common as any)?.processing || "Processing..."}
                         </>
                         ) : (
                         <>
@@ -248,7 +300,14 @@ export default function CheckoutPage() {
                         )}
                     </Button>
                     <p className="text-xs text-center text-muted-foreground mt-4">
-                        {language === 'zh' ? '订阅即表示您同意我们的服务条款' : 'By subscribing, you agree to our Terms of Service'}
+                        {language === 'zh' ? '订阅即表示您同意我们的服务条款与' : 'By subscribing, you agree to our Terms of Service and '}
+                        <Link href="/privacy" className="underline hover:text-primary transition-colors">
+                            {language === 'zh' ? '隐私政策' : 'Privacy Policy'}
+                        </Link>
+                        {language === 'zh' ? '，如需帮助请访问 ' : ' and if you need help, visit '}
+                        <Link href="/support" className="underline hover:text-primary transition-colors">
+                            {language === 'zh' ? '客服支持' : 'Support'}
+                        </Link>
                     </p>
                 </div>
             </Card>

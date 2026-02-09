@@ -79,7 +79,7 @@ export const RegionConfig = {
      * 数据库服务提供商
      */
     database: {
-        provider: isChinaRegion() ? "cloudbase" : "supabase",
+        provider: isChinaRegion() ? "cloudbase-mysql" : "supabase",
     },
 
     /**

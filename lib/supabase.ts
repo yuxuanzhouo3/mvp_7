@@ -26,11 +26,13 @@ let supabaseInstance: SupabaseClient | null = null
 export function getSupabaseClient(): SupabaseClient {
     if (!supabaseInstance) {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        const supabaseAnonKey =
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+            process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY
 
         if (!supabaseUrl || !supabaseAnonKey) {
-            console.error('Supabase 配置缺失: NEXT_PUBLIC_SUPABASE_URL: ', supabaseUrl, 'NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey)
-            throw new Error('Supabase 配置缺失: NEXT_PUBLIC_SUPABASE_URL 和/或 NEXT_PUBLIC_SUPABASE_ANON_KEY 未设置')
+            console.error('Supabase 配置缺失: NEXT_PUBLIC_SUPABASE_URL: ', supabaseUrl, 'NEXT_PUBLIC_SUPABASE_ANON_KEY/NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY:', supabaseAnonKey)
+            throw new Error('Supabase 配置缺失: NEXT_PUBLIC_SUPABASE_URL 和/或 NEXT_PUBLIC_SUPABASE_ANON_KEY (或 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY) 未设置')
         }
 
         supabaseInstance = createClient(supabaseUrl, supabaseAnonKey)

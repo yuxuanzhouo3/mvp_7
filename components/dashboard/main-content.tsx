@@ -78,39 +78,10 @@ export function MainContent({
     }
   }
 
-  const featureEmail = isChinaRegion ? 'morntool@sina.cn' : 'morntool@gmail.com'
+  const featureEmail = 'mornscience@gmail.com'
 
   return (
     <main className="flex-1 min-w-0">
-      {/* Mobile Category Navigation (Horizontal Scroll) */}
-      <div className="md:hidden mb-6 -mx-4 px-4 overflow-x-auto pb-4 scrollbar-hide">
-        <div className="flex gap-3 w-max">
-          {categories.map((category) => {
-            const Icon = category.icon;
-            const isActive = selectedCategory === category.id;
-            return (
-              <button
-                key={category.id}
-                onClick={() => setSelectedCategory(category.id)}
-                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-full whitespace-nowrap transition-all border ${
-                  isActive
-                    ? 'bg-primary text-primary-foreground border-primary shadow-md scale-105'
-                    : 'bg-card hover:bg-accent border-border text-muted-foreground'
-                }`}
-              >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-primary-foreground' : category.color}`} />
-                <span className="text-sm font-semibold">{getCategoryName(category)}</span>
-                {!isActive && (
-                  <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full font-medium">
-                    {category.count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-balance mb-2">
           {selectedCategory === "all" ? t.common?.all : categories.find(c => c.id === selectedCategory) && getCategoryName(categories.find(c => c.id === selectedCategory))}

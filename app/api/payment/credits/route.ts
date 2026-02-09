@@ -1,11 +1,11 @@
 import { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { Wechatpay } from 'wechatpay-axios-plugin'
 import { AlipaySdk } from 'alipay-sdk'
 import type { AlipaySdkSignType, AlipaySdkConfig } from 'alipay-sdk'
 import { createClient } from '@supabase/supabase-js'
 import { getDatabase } from '@/lib/database/cloudbase-service'
+import { createWechatNativeOrder, getWechatAppId, getWechatMchId } from '@/lib/utils/wechatpay-v3-lite'
 
 // 延迟初始化 Supabase 客户端，避免在构建时初始化
 let supabaseInstance: any = null;
@@ -40,32 +40,6 @@ function getStripe() {
     return stripe;
 }
 
-// 微信支付配置
-const wechatpayConfig = {
-    mchid: process.env.WECHAT_PAY_MCH_ID!, // 商户号
-    serial: process.env.WECHAT_PAY_SERIAL_NO!, // 证书序列号
-    privateKey: process.env.WECHAT_PAY_PRIVATE_KEY!, // 私钥
-    publicKey: process.env.WECHAT_PAY_PUBLIC_KEY!, // 公钥（可选）
-    // APIv3密钥
-    secret: process.env.WECHAT_PAY_API_V3_KEY!,
-    certs: {
-        cert: process.env.WECHAT_PAY_CERT_CONTENT || '',
-        key: process.env.WECHAT_PAY_PRIVATE_KEY || '',
-        // 可能还需要pfx格式的证书
-        // pfx: process.env.WECHAT_PAY_PFX || '',
-    },
-};
-
-// 初始化微信支付客户端
-let wechatpay: any = null;
-try {
-    if (wechatpayConfig.mchid && wechatpayConfig.serial && wechatpayConfig.privateKey) {
-        wechatpay = new Wechatpay(wechatpayConfig);
-    }
-} catch (error) {
-    console.error('❌ 微信支付初始化失败:', error);
-}
-
 // 支付宝支付配置
 const alipayConfig: AlipaySdkConfig = {
     appId: process.env.ALIPAY_APP_ID || '2021005199628151',
@@ -84,14 +58,14 @@ async function getAlipaySdk() {
 }
 
 // 价格配置
-const USD_TO_CNY_RATE = 7.2;
+const USD_TO_CNY_RATE = 1;
 
 // 积分包定价配置
 const CREDIT_PACKAGES = [
-    { amount: 50, price: 9.99 },
-    { amount: 100, price: 17.99 },
-    { amount: 250, price: 39.99 },
-    { amount: 500, price: 69.99 }
+    { amount: 50, price: 0.01 },
+    { amount: 100, price: 0.01 },
+    { amount: 250, price: 0.01 },
+    { amount: 500, price: 0.01 }
 ];
 
 /**
@@ -169,10 +143,13 @@ export async function POST(req: NextRequest) {
             case 'wechatpay':
                 console.log('into wechatpay');
                 // 检查微信支付是否已配置
-                if (!wechatpay) {
+                try {
+                    getWechatMchId();
+                    getWechatAppId();
+                } catch (initError: any) {
                     return NextResponse.json(
                         {
-                            error: 'WeChat Pay is not configured',
+                            error: initError?.message || 'WeChat Pay is not configured',
                             message: 'Please contact support for assistance'
                         },
                         { status: 500 }
@@ -187,23 +164,12 @@ export async function POST(req: NextRequest) {
                 const outTradeNo = `WC${Date.now()}${Math.random().toString(36).substr(2, 9)}`;
 
                 // 创建支付订单
-                const orderData = {
-                    appid: process.env.WECHAT_PAY_APP_ID!, // 微信公众号/小程序APPID
-                    mchid: wechatpayConfig.mchid,
+                const response = await createWechatNativeOrder({
                     description: `SiteHub - ${creditAmount} Credits`,
-                    out_trade_no: outTradeNo,
-                    notify_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/payment/wechat/notify`,
-                    amount: {
-                        total: amountInCents,
-                        currency: 'CNY',
-                    },
-                    payer: {
-                        openid: 'PLACEHOLDER_OPENID', // 在实际应用中需要用户微信登录后获取
-                    },
-                };
-
-                // 调用微信支付API创建订单
-                const response = await wechatpay.v3.pay.transactions.jsapi.post(orderData);
+                    outTradeNo,
+                    notifyUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/api/payment/webhook/wechat`,
+                    amountInCents,
+                });
                 console.log('🚀 ~ file: 调用微信支付API创建订单 ~ POST ~ response:', response);
                 // 保存交易记录到数据库
                 const transactionRecord = {
@@ -237,14 +203,14 @@ export async function POST(req: NextRequest) {
                 return NextResponse.json({
                     success: true,
                     outTradeNo,
-                    qrCodeUrl: response.data.code_url, // 扫码支付链接
-                    prepayId: response.data.prepay_id,
+                    qrCodeUrl: response.code_url, // 扫码支付链接
+                    prepayId: response.prepay_id,
                     // 前端需要的支付参数
                     paymentParams: {
-                        appId: process.env.WECHAT_PAY_APP_ID,
+                        appId: getWechatAppId(),
                         timeStamp: Math.floor(Date.now() / 1000).toString(),
                         nonceStr: Math.random().toString(36).substr(2, 15),
-                        package: `prepay_id=${response.data.prepay_id}`,
+                        package: `prepay_id=${response.prepay_id}`,
                         signType: 'RSA',
                         // paySign 需要前端根据其他参数计算
                     },
@@ -276,27 +242,22 @@ export async function POST(req: NextRequest) {
                 // 动态获取支付宝 SDK 实例
                 const alipaySdk = await getAlipaySdk();
 
-                // 创建支付宝订单参数
-                const formData = {
-                    method: 'alipay.trade.page.pay', // PC网站支付
-                    bizContent: {
-                        out_trade_no: outTradeNoAlipay,
-                        product_code: 'FAST_INSTANT_TRADE_PAY',
-                        total_amount: amountCNYFixed,
-                        subject: subject,
-                        body: body_text,
-                    },
-                    returnUrl: returnUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/payment/success?session_id=${outTradeNoAlipay}`,
-                    notifyUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/api/payment/alipay/notify`,
-                };
-
-                console.log('🚀 ~ file: [payment]/route.ts: 189 ~ alipaySdk.exec:' );
-                // 生成支付链接
-                const paymentUrl = await alipaySdk.pageExec(formData.method as any, formData.bizContent as any, {
-                    returnUrl: formData.returnUrl,
-                    notifyUrl: formData.notifyUrl,
-                    method: 'GET',
-                });
+                // 创建支付宝订单参数（按 alipay-sdk pageExec 规范）
+                const paymentUrl = await alipaySdk.pageExec(
+                    'alipay.trade.page.pay',
+                    'GET',
+                    {
+                        bizContent: {
+                            out_trade_no: outTradeNoAlipay,
+                            product_code: 'FAST_INSTANT_TRADE_PAY',
+                            total_amount: amountCNYFixed,
+                            subject: subject,
+                            body: body_text,
+                        },
+                        returnUrl: returnUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/payment/success?session_id=${outTradeNoAlipay}`,
+                        notifyUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/api/payment/alipay/notify`,
+                    }
+                );
 
                 // 保存订单到数据库
                 const db =  await getDatabase();

@@ -1,4 +1,5 @@
 import { validateAndReportConfig } from "../utils/config-validator";
+import { resolveDeploymentRegion } from "./deployment-region";
 
 /**
  * 部署配置文件
@@ -119,8 +120,7 @@ function generateConfig(region: DeploymentRegion): DeploymentConfig {
  * - 未设置或其他值：默认为中国版 (CN)
  * - "INTL"：国际版
  */
-export const DEPLOYMENT_REGION: DeploymentRegion =
-    process.env.NEXT_PUBLIC_DEPLOYMENT_REGION === "INTL" ? "INTL" : "CN";
+export const DEPLOYMENT_REGION: DeploymentRegion = resolveDeploymentRegion();
 
 // 在运行时验证区域设置（仅在服务器端运行时执行，不包括构建时）
 // 根据运行时配置注入规范，构建时不应包含任何敏感配置
