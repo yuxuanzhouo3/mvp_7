@@ -145,20 +145,30 @@ Best regards,
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file && file.type === "text/csv") {
-      // Mock CSV parsing
-      const mockRecipients: Recipient[] = [
-        { email: "john.doe@company.com", name: "John Doe", company: "Tech Corp", position: "Software Engineer" },
-        { email: "jane.smith@startup.com", name: "Jane Smith", company: "StartupXYZ", position: "Product Manager" },
-        {
-          email: "mike.johnson@enterprise.com",
-          name: "Mike Johnson",
-          company: "Enterprise Inc",
-          position: "Senior Developer",
-        },
-      ]
-      setRecipients(mockRecipients)
+
+    if (!file) return
+
+    const fileType = String(file.type || "").toLowerCase()
+    const fileName = String(file.name || "").toLowerCase()
+    const isCsv = fileName.endsWith(".csv") || fileType.includes("csv") || fileType === "application/vnd.ms-excel"
+
+    if (!isCsv) {
+      toast.error("Please select a CSV file")
+      return
     }
+
+    // Mock CSV parsing
+    const mockRecipients: Recipient[] = [
+      { email: "john.doe@company.com", name: "John Doe", company: "Tech Corp", position: "Software Engineer" },
+      { email: "jane.smith@startup.com", name: "Jane Smith", company: "StartupXYZ", position: "Product Manager" },
+      {
+        email: "mike.johnson@enterprise.com",
+        name: "Mike Johnson",
+        company: "Enterprise Inc",
+        position: "Senior Developer",
+      },
+    ]
+    setRecipients(mockRecipients)
   }
 
   const handleSendEmails = async () => {
@@ -317,19 +327,35 @@ Best regards,
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* File Upload Area */}
-                  <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors">
+                  <label
+                    htmlFor="csv-upload"
+                    className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors cursor-pointer"
+                  >
                     <div className="bg-primary/10 p-3 rounded-full mb-3">
                       <Upload className="w-6 h-6 text-primary" />
                     </div>
-                    <Label htmlFor="csv-upload" className="cursor-pointer text-sm font-medium mb-1 hover:underline">
-                      {t.emailMultiSender.importCsv}
-                    </Label>
+                    <p className="text-sm font-medium mb-1">{t.emailMultiSender.importCsv}</p>
                     <p className="text-xs text-muted-foreground mb-3">.csv file with headers: name, email, company, position</p>
-                    <Input id="csv-upload" type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
-                    <Button variant="outline" size="sm" onClick={downloadSampleCsv} className="h-7 text-xs">
+                    <Input
+                      id="csv-upload"
+                      type="file"
+                      accept=".csv"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        downloadSampleCsv()
+                      }}
+                      className="h-7 text-xs"
+                    >
                       Download Sample CSV
                     </Button>
-                  </div>
+                  </label>
 
                   {/* Manual Add Form */}
                   <div className="space-y-3 p-4 border rounded-lg bg-card">

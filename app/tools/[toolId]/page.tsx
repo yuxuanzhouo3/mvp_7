@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation"
 import { ToolLayout } from "@/components/tool-layout"
+import { ToolAccessGuard } from "@/components/tool-access-guard"
 import { JpegToPdfConverter } from "@/components/tools/jpeg-to-pdf-converter"
 import { FileFormatConverter } from "@/components/tools/file-format-converter"
 import { VideoToGifCreator } from "@/components/tools/video-to-gif-creator"
@@ -130,7 +131,7 @@ export default function ToolPage({ params }: ToolPageProps) {
 
   return (
       <ToolLayout title={metadata.title} description={metadata.description} category={metadata.category} creditCost={creditCost}>
-        <ToolComponent />
+        <ToolAccessGuard><ToolComponent /></ToolAccessGuard>
       </ToolLayout>
   )
 }
