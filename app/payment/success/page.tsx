@@ -31,7 +31,7 @@ export default function PaymentSuccessPage() {
       outTradeNo: normalizeParam(searchParams.get("out_trade_no")),
       tradeNo: normalizeParam(searchParams.get("trade_no")),
       planId: normalizeParam(searchParams.get("planId")),
-      billingCycle: searchParams.get("cycle") === "yearly" ? "yearly" : "monthly",
+      billingCycle: "monthly" as const,
     } as const
   }, [searchParams])
 
@@ -40,6 +40,42 @@ export default function PaymentSuccessPage() {
       try {
         const deploymentRegion = (process.env.NEXT_PUBLIC_DEPLOYMENT_REGION || "CN").toUpperCase()
         if (deploymentRegion === "CN") {
+          if (params.outTradeNo) {
+            try {
+              const reconcileResponse = await fetch(
+                `/api/payment/status?paymentId=${encodeURIComponent(params.outTradeNo)}&method=alipay`
+              )
+              const reconcileResult = await reconcileResponse.json()
+              console.info("[payment/success] alipay reconcile result:", {
+                status: reconcileResponse.status,
+                body: reconcileResult,
+              })
+            } catch (reconcileError) {
+              console.error("[payment/success] alipay reconcile failed:", reconcileError)
+            }
+          }
+
+          if (params.outTradeNo && params.tradeNo) {
+            try {
+              const query = new URLSearchParams()
+              query.set("out_trade_no", params.outTradeNo)
+              query.set("trade_no", params.tradeNo)
+              query.set("trade_status", "TRADE_SUCCESS")
+              query.set("sign_type", "RSA2")
+
+              const fallbackResponse = await fetch(`/api/payment/webhook/alipay?${query.toString()}`)
+              const fallbackText = await fallbackResponse.text()
+              console.info("[payment/success] alipay fallback result:", {
+                status: fallbackResponse.status,
+                text: fallbackText,
+                outTradeNo: params.outTradeNo,
+                tradeNo: params.tradeNo,
+              })
+            } catch (fallbackError) {
+              console.error("[payment/success] alipay fallback failed:", fallbackError)
+            }
+          }
+
           const rawUser = localStorage.getItem("user")
           if (rawUser) {
             const user = JSON.parse(rawUser)
@@ -56,15 +92,25 @@ export default function PaymentSuccessPage() {
                       typeof profileResult.user.credits === "number"
                         ? profileResult.user.credits
                         : user.credits,
-                    subscription_tier:
-                      profileResult.user.subscription_tier ||
-                      (profileResult.user.pro ? "pro" : user.subscription_tier),
-                    subscription_expires_at:
-                      profileResult.user.subscription_expires_at ||
-                      profileResult.user.membership_expires_at ||
-                      user.subscription_expires_at,
                   }
                   localStorage.setItem("user", JSON.stringify(nextUser))
+                } else if (user?.email) {
+                  const byEmailResponse = await fetch(
+                    `/api/user/profile?email=${encodeURIComponent(user.email)}`
+                  )
+                  const byEmailResult = await byEmailResponse.json()
+
+                  if (byEmailResponse.ok && byEmailResult?.success && byEmailResult?.user) {
+                    const nextUser = {
+                      ...user,
+                      ...byEmailResult.user,
+                      credits:
+                        typeof byEmailResult.user.credits === "number"
+                          ? byEmailResult.user.credits
+                          : user.credits,
+                    }
+                    localStorage.setItem("user", JSON.stringify(nextUser))
+                  }
                 }
               } catch {
                 // ignore profile sync errors
@@ -73,26 +119,14 @@ export default function PaymentSuccessPage() {
           }
 
           setStatus("success")
-          setMessage("支付结果已提交，会员信息将自动刷新。")
+          setMessage("支付结果已提交，积分将自动刷新。")
           return
         }
 
         const rawUser = localStorage.getItem("user")
-        if (!rawUser) {
-          setStatus("error")
-          setMessage("未检测到登录信息，请重新登录后在订阅页查看结果。")
-          return
-        }
-
-        const user = JSON.parse(rawUser)
+        const user = rawUser ? JSON.parse(rawUser) : null
         const userId = user?.id
         const userEmail = user?.email
-
-        if (!userEmail || !params.planId) {
-          setStatus("error")
-          setMessage("缺少必要的用户或套餐信息，无法确认支付。")
-          return
-        }
 
         if (!params.sessionId && !params.token && !params.outTradeNo && !params.tradeNo) {
           setStatus("error")
@@ -120,25 +154,23 @@ export default function PaymentSuccessPage() {
           throw new Error(result?.error || "支付确认失败")
         }
 
-        const nextUser = {
-          ...user,
-          credits:
-            typeof result?.newCredits === "number"
-              ? result.newCredits
-              : user.credits,
-          subscription_tier:
-            result?.subscriptionTier || user.subscription_tier,
-          subscription_expires_at:
-            result?.newExpireAt || user.subscription_expires_at,
-        }
+        if (user) {
+          const nextUser = {
+            ...user,
+            credits:
+              typeof result?.newCredits === "number"
+                ? result.newCredits
+                : user.credits,
+          }
 
-        localStorage.setItem("user", JSON.stringify(nextUser))
+          localStorage.setItem("user", JSON.stringify(nextUser))
+        }
 
         setStatus("success")
         setMessage(
           result?.alreadyProcessed
-            ? "支付已处理完成，会员权益已是最新状态。"
-            : "支付成功，会员权益已更新。"
+            ? "支付已处理完成，积分已是最新状态。"
+            : "支付成功，积分已更新。"
         )
       } catch (error: any) {
         setStatus("error")
@@ -173,7 +205,7 @@ export default function PaymentSuccessPage() {
             href="/subscription"
             className="inline-flex w-full items-center justify-center rounded-lg border border-border px-4 py-2.5 font-medium"
           >
-            View Plans
+            View Credit Packages
           </Link>
         </div>
       </div>

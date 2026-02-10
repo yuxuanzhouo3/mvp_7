@@ -1,7 +1,7 @@
 import Stripe from "stripe"
 import { Client, Environment, OrdersController } from "@paypal/paypal-server-sdk"
 import { createClient } from "@supabase/supabase-js"
-import { MEMBERSHIP_PLANS, getMembershipCreditsGrant } from "@/lib/credits/pricing"
+import { MEMBERSHIP_PLANS, getCreditGrantByPlan, getPlanUsdPriceByRegion } from "@/lib/credits/pricing"
 import { resolveDeploymentRegion } from "@/lib/config/deployment-region"
 
 export type SupportedPaymentMethod = "stripe" | "paypal" | "alipay" | "wechatpay"
@@ -78,21 +78,6 @@ function normalizeCycle(cycle?: string | null): "monthly" | "yearly" {
   return cycle === "yearly" ? "yearly" : "monthly"
 }
 
-function computeNewExpireAt(current?: string | null, billingCycle: "monthly" | "yearly" = "monthly") {
-  const now = new Date()
-  const base = current ? new Date(current) : now
-  const start = base > now ? base : now
-  const next = new Date(start)
-
-  if (billingCycle === "yearly") {
-    next.setFullYear(next.getFullYear() + 1)
-  } else {
-    next.setMonth(next.getMonth() + 1)
-  }
-
-  return next.toISOString()
-}
-
 function resolveMethod(input: ConfirmSubscriptionPaymentInput): SupportedPaymentMethod {
   if (input.paymentMethod) return input.paymentMethod
   if (input.sessionId) return "stripe"
@@ -110,6 +95,16 @@ function isPlaceholderId(value?: string | null): boolean {
   if (trimmed.includes("CHECKOUT_SESSION_ID")) return true
 
   return false
+}
+
+function normalizeEmail(value?: string | null) {
+  return String(value || "").trim().toLowerCase()
+}
+
+function isUuid(value?: string | null) {
+  const id = String(value || "").trim()
+  if (!id) return false
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
 }
 
 async function capturePayPalOrder(orderId: string) {
@@ -212,8 +207,8 @@ async function upsertWebPaymentTransaction(options: {
 async function fetchUserSummaryByEmail(supabase: any, userEmail: string) {
   const { data } = await supabase
     .from("user")
-    .select("id, credits, subscription_expires_at, subscription_tier")
-    .eq("email", userEmail)
+    .select("id, credits")
+    .ilike("email", normalizeEmail(userEmail))
     .maybeSingle()
 
   return data
@@ -252,6 +247,8 @@ export async function confirmSubscriptionPayment(
     throw new PaymentConfirmError("No transaction identifier", 400)
   }
 
+  let stripeCustomerEmail = ""
+
   if (!input.skipProviderVerification) {
     if (method === "stripe") {
       const sessionId = input.sessionId || transactionId
@@ -261,6 +258,9 @@ export async function confirmSubscriptionPayment(
         throw new PaymentConfirmError(`Stripe session not paid: ${session.payment_status}`, 400)
       }
 
+      stripeCustomerEmail = normalizeEmail(
+        session.customer_details?.email || session.customer_email || session.customer?.toString()
+      )
       transactionId = session.id
     }
 
@@ -281,7 +281,8 @@ export async function confirmSubscriptionPayment(
     throw new PaymentConfirmError(txLoadError.message, 500)
   }
 
-  const resolvedUserEmail = input.userEmail || existingTx?.user_email || ""
+  const resolvedUserEmail =
+    normalizeEmail(input.userEmail) || normalizeEmail(existingTx?.user_email) || stripeCustomerEmail
   const resolvedPlanId = input.planId || existingTx?.plan_type || ""
   const cycle = normalizeCycle(input.billingCycle || existingTx?.billing_cycle)
   const paymentMethod = (existingTx?.payment_method || method) as SupportedPaymentMethod
@@ -295,7 +296,8 @@ export async function confirmSubscriptionPayment(
     throw new PaymentConfirmError("Invalid planId", 400)
   }
 
-  const amountUsd = cycle === "yearly" ? Number(plan.yearly_price) : Number(plan.monthly_price)
+  const deploymentRegion = resolveDeploymentRegion()
+  const amountUsd = getPlanUsdPriceByRegion(plan, cycle, deploymentRegion)
 
   if (existingTx?.status === "completed") {
     await upsertWebPaymentTransaction({
@@ -314,9 +316,9 @@ export async function confirmSubscriptionPayment(
       success: true,
       alreadyProcessed: true,
       transactionId,
-      newExpireAt: existingUser?.subscription_expires_at ?? null,
+      newExpireAt: null,
       newCredits: Number(existingUser?.credits ?? 0),
-      subscriptionTier: existingUser?.subscription_tier ?? null,
+      subscriptionTier: null,
     }
   }
 
@@ -341,10 +343,10 @@ export async function confirmSubscriptionPayment(
     shouldApplyBenefits = Boolean(transitionedTx?.id)
   } else {
     const { error: insertTxError } = await supabase.from("payment_transactions").insert({
-      user_email: resolvedUserEmail,
+      user_email: normalizeEmail(resolvedUserEmail),
       plan_type: resolvedPlanId,
       billing_cycle: cycle,
-      credit_amount: getMembershipCreditsGrant(plan, cycle),
+      credit_amount: getCreditGrantByPlan(plan, cycle),
       amount_usd: amountUsd,
       payment_method: paymentMethod,
       transaction_id: transactionId,
@@ -381,31 +383,57 @@ export async function confirmSubscriptionPayment(
       success: true,
       alreadyProcessed: true,
       transactionId,
-      newExpireAt: existingUser?.subscription_expires_at ?? null,
+      newExpireAt: null,
       newCredits: Number(existingUser?.credits ?? 0),
-      subscriptionTier: existingUser?.subscription_tier ?? null,
+      subscriptionTier: null,
     }
   }
 
-  let resolvedUserId = input.userId || ""
+  let resolvedUserId = isUuid(input.userId) ? String(input.userId).trim() : ""
 
   if (!resolvedUserId) {
     const { data: byEmail } = await supabase
       .from("user")
       .select("id")
-      .eq("email", resolvedUserEmail)
+      .ilike("email", resolvedUserEmail)
       .maybeSingle()
 
     resolvedUserId = byEmail?.id || ""
   }
 
+  if (!resolvedUserId && isUuid(input.userId)) {
+    const candidateUserId = String(input.userId).trim()
+    const now = new Date().toISOString()
+    const { error: createUserError } = await supabase.from("user").insert({
+      id: candidateUserId,
+      email: resolvedUserEmail,
+      full_name: resolvedUserEmail.split("@")[0],
+      credits: 0,
+      subscription_tier: "free",
+      created_at: now,
+      updated_at: now,
+    })
+
+    if (createUserError && createUserError.code !== "23505") {
+      throw new PaymentConfirmError(createUserError.message, 500)
+    }
+
+    const { data: createdByEmail } = await supabase
+      .from("user")
+      .select("id")
+      .ilike("email", resolvedUserEmail)
+      .maybeSingle()
+
+    resolvedUserId = createdByEmail?.id || candidateUserId
+  }
+
   if (!resolvedUserId) {
-    throw new PaymentConfirmError("User not found", 404)
+    throw new PaymentConfirmError(`User not found: ${resolvedUserEmail}`, 404)
   }
 
   const { data: userRow, error: userLoadError } = await supabase
     .from("user")
-    .select("id, credits, subscription_expires_at")
+    .select("id, credits")
     .eq("id", resolvedUserId)
     .maybeSingle()
 
@@ -415,15 +443,12 @@ export async function confirmSubscriptionPayment(
 
   const currentCredits = Number(userRow?.credits ?? 0)
   const safeCredits = Number.isFinite(currentCredits) ? currentCredits : 0
-  const grantCredits = getMembershipCreditsGrant(plan, cycle)
+  const grantCredits = getCreditGrantByPlan(plan, cycle)
   const newCredits = safeCredits + grantCredits
-  const newExpireAt = computeNewExpireAt(userRow?.subscription_expires_at ?? null, cycle)
 
   const { error: userUpdateError } = await supabase
     .from("user")
     .update({
-      subscription_tier: plan.tier,
-      subscription_expires_at: newExpireAt,
       credits: newCredits,
     })
     .eq("id", resolvedUserId)
@@ -432,54 +457,11 @@ export async function confirmSubscriptionPayment(
     throw new PaymentConfirmError(userUpdateError.message, 500)
   }
 
-  const nowIso = new Date().toISOString()
-
-  const { error: subscriptionError } = await supabase.from("subscriptions").upsert(
-    {
-      user_email: resolvedUserEmail,
-      plan_type: resolvedPlanId,
-      status: "active",
-      current_period_start: nowIso,
-      current_period_end: newExpireAt,
-      cancel_at_period_end: false,
-      payment_method: paymentMethod,
-      updated_at: nowIso,
-    },
-    { onConflict: "user_email" }
-  )
-
-  if (subscriptionError) {
-    throw new PaymentConfirmError(subscriptionError.message, 500)
-  }
-
-  const { error: webSubscriptionError } = await supabase.from("web_subscriptions").upsert(
-    {
-      user_email: resolvedUserEmail,
-      platform: "web",
-      payment_method: paymentMethod,
-      plan_type: resolvedPlanId,
-      billing_cycle: cycle,
-      status: "active",
-      start_time: nowIso,
-      expire_time: newExpireAt,
-      current_period_start: nowIso,
-      current_period_end: newExpireAt,
-      cancel_at_period_end: false,
-      auto_renew: false,
-      updated_at: nowIso,
-    },
-    { onConflict: "user_email" }
-  )
-
-  if (webSubscriptionError) {
-    throw new PaymentConfirmError(webSubscriptionError.message, 500)
-  }
-
   return {
     success: true,
     transactionId,
-    newExpireAt,
+    newExpireAt: null,
     newCredits,
-    subscriptionTier: plan.tier,
+    subscriptionTier: null,
   }
 }

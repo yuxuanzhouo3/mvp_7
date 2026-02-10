@@ -18,22 +18,7 @@ export function validateEnvironmentConfig(isChinaRegion: boolean = true): Config
 
   // 根据区域验证必需的环境变量
   if (isChinaRegion) {
-    // CloudBase MySQL 相关配置
-    if (!process.env.CLOUDBASE_MYSQL_HOST) {
-      missingVariables.push('CLOUDBASE_MYSQL_HOST');
-    }
-    if (!process.env.CLOUDBASE_MYSQL_PORT) {
-      missingVariables.push('CLOUDBASE_MYSQL_PORT');
-    }
-    if (!process.env.CLOUDBASE_MYSQL_DATABASE) {
-      missingVariables.push('CLOUDBASE_MYSQL_DATABASE');
-    }
-    if (!process.env.CLOUDBASE_MYSQL_USER) {
-      missingVariables.push('CLOUDBASE_MYSQL_USER');
-    }
-    if (!process.env.CLOUDBASE_MYSQL_PASSWORD) {
-      missingVariables.push('CLOUDBASE_MYSQL_PASSWORD');
-    }
+    // 中国区暂不强制要求 CloudBase MySQL 变量
   } else {
     // Supabase 相关配置
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {

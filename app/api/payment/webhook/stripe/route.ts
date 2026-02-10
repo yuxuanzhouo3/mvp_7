@@ -45,6 +45,36 @@ function getQueryParam(rawUrl: unknown, key: string): string | undefined {
   }
 }
 
+
+function getStripeWebhookSecrets(): string[] {
+  const raw = String(process.env.STRIPE_WEBHOOK_SECRET || "").trim()
+  if (!raw) return []
+
+  return raw
+    .split(/\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function constructVerifiedStripeEvent(options: {
+  stripe: Stripe
+  payload: Buffer
+  signature: string
+  secrets: string[]
+}) {
+  let lastError: unknown = null
+
+  for (const secret of options.secrets) {
+    try {
+      return options.stripe.webhooks.constructEvent(options.payload, options.signature, secret)
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw lastError || new Error("Stripe webhook signature verification failed")
+}
+
 async function saveWebhookEvent(options: {
   provider: "stripe"
   eventId: string
@@ -79,19 +109,72 @@ async function saveWebhookEvent(options: {
   }
 }
 
+
+async function saveWebhookEventSafe(options: {
+  provider: "stripe"
+  eventId: string
+  eventType: string
+  transactionId?: string
+  payload: any
+  status: "received" | "processed" | "failed" | "ignored"
+  errorMessage?: string
+}) {
+  try {
+    await saveWebhookEvent(options)
+  } catch (error) {
+    console.error("[stripe/webhook] save webhook event fatal:", error)
+  }
+}
+
+export async function GET() {
+  if (resolveDeploymentRegion() !== "INTL") {
+    return NextResponse.json({ status: "ignored", reason: "not_intl" }, { status: 200 })
+  }
+
+  await saveWebhookEventSafe({
+    provider: "stripe",
+    eventId: `stripe_health_${Date.now()}`,
+    eventType: "healthcheck",
+    payload: { source: "manual_get" },
+    status: "ignored",
+  })
+
+  return NextResponse.json({ status: "ok", provider: "stripe" })
+}
+
 export async function POST(request: NextRequest) {
   let rawBody = ""
+  let rawPayloadBuffer: Buffer = Buffer.from("")
 
   try {
     if (resolveDeploymentRegion() !== "INTL") {
+      await saveWebhookEventSafe({
+        provider: "stripe",
+        eventId: `stripe_region_${Date.now()}`,
+        eventType: "region_rejected",
+        payload: { source: "webhook", region: resolveDeploymentRegion() },
+        status: "failed",
+        errorMessage: "Stripe webhook only available in INTL",
+      })
+
       return NextResponse.json({ error: "Stripe webhook only available in INTL" }, { status: 403 })
     }
 
-    rawBody = await request.text()
+    rawPayloadBuffer = Buffer.from(await request.arrayBuffer())
+    rawBody = rawPayloadBuffer.toString("utf8")
     const signature = request.headers.get("stripe-signature")
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+    const webhookSecrets = getStripeWebhookSecrets()
 
-    if (!signature || !webhookSecret) {
+    if (!signature || webhookSecrets.length === 0) {
+      await saveWebhookEventSafe({
+        provider: "stripe",
+        eventId: `stripe_missing_signature_${Date.now()}`,
+        eventType: "signature_or_secret_missing",
+        payload: { hasSignature: Boolean(signature), webhookSecretCount: webhookSecrets.length, rawBody },
+        status: "failed",
+        errorMessage: "Missing Stripe signature or STRIPE_WEBHOOK_SECRET",
+      })
+
       return NextResponse.json(
         { error: "Missing Stripe signature or STRIPE_WEBHOOK_SECRET" },
         { status: 400 }
@@ -99,7 +182,12 @@ export async function POST(request: NextRequest) {
     }
 
     const stripe = getStripeClient()
-    const event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret)
+    const event = constructVerifiedStripeEvent({
+      stripe,
+      payload: rawPayloadBuffer,
+      signature,
+      secrets: webhookSecrets,
+    })
 
     const eventId = event.id
     const eventType = event.type
@@ -112,7 +200,7 @@ export async function POST(request: NextRequest) {
     ])
 
     if (!interestedEvents.has(eventType)) {
-      await saveWebhookEvent({
+      await saveWebhookEventSafe({
         provider: "stripe",
         eventId,
         eventType,
@@ -125,7 +213,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!sessionId) {
-      await saveWebhookEvent({
+      await saveWebhookEventSafe({
         provider: "stripe",
         eventId,
         eventType,
@@ -150,7 +238,7 @@ export async function POST(request: NextRequest) {
       metadata?.userEmail || customer_details?.email || customer_email || undefined
 
     if (!planId || !userEmail) {
-      await saveWebhookEvent({
+      await saveWebhookEventSafe({
         provider: "stripe",
         eventId,
         eventType,
@@ -166,7 +254,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    await saveWebhookEvent({
+    await saveWebhookEventSafe({
       provider: "stripe",
       eventId,
       eventType,
@@ -183,7 +271,7 @@ export async function POST(request: NextRequest) {
       paymentMethod: "stripe",
     })
 
-    await saveWebhookEvent({
+    await saveWebhookEventSafe({
       provider: "stripe",
       eventId,
       eventType,
@@ -202,7 +290,7 @@ export async function POST(request: NextRequest) {
       const eventType = parsed?.type || "unknown"
       const transactionId = parsed?.data?.object?.id
 
-      await saveWebhookEvent({
+      await saveWebhookEventSafe({
         provider: "stripe",
         eventId,
         eventType,

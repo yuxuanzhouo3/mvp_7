@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyAdminToken } from "@/lib/downloads/admin-auth"
 import { uploadToCloudbaseStorage } from "@/lib/downloads/cloudbase-storage"
-import { getSupabaseAdBucket, getSupabaseAdminForDownloads } from "@/lib/downloads/supabase-admin"
+import { ensureSupabaseBucketExists, getSupabaseAdBucket, getSupabaseAdminForDownloads } from "@/lib/downloads/supabase-admin"
 import type { AdRegion } from "@/lib/ads/repository"
 
 export const runtime = "nodejs"
@@ -13,6 +13,7 @@ function normalizeRegion(value?: string | null): AdRegion {
 async function uploadToSupabase(input: { file: File }) {
   const supabase = getSupabaseAdminForDownloads()
   const bucket = getSupabaseAdBucket()
+  await ensureSupabaseBucketExists(bucket, { public: true })
 
   const safeName = String(input.file.name || `ad_${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, "_")
   const objectPath = `ads/${Date.now()}_${safeName}`

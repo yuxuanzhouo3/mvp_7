@@ -36,6 +36,8 @@ export interface MembershipPlan {
   tier: "basic" | "pro" | "business"
   monthly_price: number
   yearly_price: number
+  intl_monthly_price?: number
+  intl_yearly_price?: number
   credits_per_month: number
   features: string[]
   popular?: boolean
@@ -48,6 +50,8 @@ export const MEMBERSHIP_PLANS: MembershipPlan[] = [
     tier: "basic",
     monthly_price: 0.01,
     yearly_price: 0.01,
+    intl_monthly_price: 12.9,
+    intl_yearly_price: 129,
     credits_per_month: 300,
     features: ["Core tools", "Email support", "Monthly credits refresh"],
   },
@@ -57,6 +61,8 @@ export const MEMBERSHIP_PLANS: MembershipPlan[] = [
     tier: "pro",
     monthly_price: 0.01,
     yearly_price: 0.01,
+    intl_monthly_price: 19.9,
+    intl_yearly_price: 199,
     credits_per_month: 900,
     features: ["All Basic features", "Priority queue", "Advanced tools"],
     popular: true,
@@ -67,10 +73,28 @@ export const MEMBERSHIP_PLANS: MembershipPlan[] = [
     tier: "business",
     monthly_price: 0.01,
     yearly_price: 0.01,
+    intl_monthly_price: 29.9,
+    intl_yearly_price: 299,
     credits_per_month: 2800,
     features: ["All Pro features", "Higher throughput", "Priority support"],
   },
 ]
+
+export function getPlanUsdPriceByRegion(
+  plan: MembershipPlan,
+  billingCycle: "monthly" | "yearly",
+  region: "CN" | "INTL"
+) {
+  if (region === "INTL") {
+    if (billingCycle === "yearly") {
+      return Number(plan.intl_yearly_price ?? plan.intl_monthly_price ?? plan.yearly_price)
+    }
+
+    return Number(plan.intl_monthly_price ?? plan.monthly_price)
+  }
+
+  return billingCycle === "yearly" ? Number(plan.yearly_price) : Number(plan.monthly_price)
+}
 
 export function getMembershipPlanByTier(tier?: string | null): MembershipPlan | null {
   if (!tier) return null
@@ -88,4 +112,8 @@ export function getMembershipPrice(plan: MembershipPlan, billingCycle: "monthly"
 
 export function getMembershipCreditsGrant(plan: MembershipPlan, billingCycle: "monthly" | "yearly") {
   return billingCycle === "yearly" ? plan.credits_per_month * 12 : plan.credits_per_month
+}
+
+export function getCreditGrantByPlan(plan: MembershipPlan, billingCycle: "monthly" | "yearly") {
+  return getMembershipCreditsGrant(plan, billingCycle)
 }

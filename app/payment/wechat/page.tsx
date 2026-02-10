@@ -13,7 +13,7 @@ export default function WechatPaymentPage() {
 
   const paymentId = searchParams.get("paymentId") || ""
   const planId = searchParams.get("planId") || ""
-  const cycle = searchParams.get("cycle") === "yearly" ? "yearly" : "monthly"
+  const method = searchParams.get("method") || "wechatpay"
   const qrCodeUrl = searchParams.get("qrCodeUrl") || ""
   const qrImageSrc = qrCodeUrl
     ? /^https?:\/\//i.test(qrCodeUrl)
@@ -34,7 +34,9 @@ export default function WechatPaymentPage() {
 
     setIsRefreshing(true)
     try {
-      const response = await fetch(`/api/payment/status?paymentId=${encodeURIComponent(paymentId)}`)
+      const response = await fetch(
+        `/api/payment/status?paymentId=${encodeURIComponent(paymentId)}&method=${encodeURIComponent(method)}`
+      )
       const result = await response.json()
 
       if (!response.ok || result?.success === false) {
@@ -47,9 +49,9 @@ export default function WechatPaymentPage() {
       }
       if (paymentStatus === "completed") {
         setStatus("success")
-        setMessage("支付成功，正在同步会员权益...")
+        setMessage("支付成功，正在同步积分...")
         setStopPolling(true)
-        router.replace(`/payment/success?out_trade_no=${encodeURIComponent(paymentId)}&planId=${encodeURIComponent(planId)}&cycle=${cycle}`)
+        router.replace(`/payment/success?out_trade_no=${encodeURIComponent(paymentId)}&planId=${encodeURIComponent(planId)}`)
         return
       }
 
@@ -85,7 +87,7 @@ export default function WechatPaymentPage() {
     checkStatus()
 
     return () => clearInterval(timer)
-  }, [hasRequiredParams, paymentId, pollCount, stopPolling])
+  }, [hasRequiredParams, paymentId, method, pollCount, stopPolling])
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
@@ -120,7 +122,7 @@ export default function WechatPaymentPage() {
             href="/subscription"
             className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground"
           >
-            返回套餐页
+            返回积分套餐
           </Link>
         </div>
       </div>

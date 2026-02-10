@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getPackageById, getSupabaseSignedDownloadUrl, recordDownloadEvent, downloadCloudbasePackageFile } from "@/lib/downloads/repository"
+import { getCloudbaseTempFileURL } from "@/lib/downloads/cloudbase-storage"
+import { getPackageById, getSupabaseSignedDownloadUrl, recordDownloadEvent } from "@/lib/downloads/repository"
 import { PackageRegion } from "@/lib/downloads/types"
 
 export const runtime = "nodejs"
@@ -48,12 +49,8 @@ export async function GET(
       return NextResponse.redirect(signedUrl, { status: 302 })
     }
 
-    const fileBuffer = await downloadCloudbasePackageFile(pkg.storagePath)
-    const headers = new Headers()
-    headers.set("Content-Type", pkg.mimeType || "application/octet-stream")
-    headers.set("Content-Disposition", `attachment; filename=\"${encodeURIComponent(pkg.fileName)}\"`)
-
-    return new NextResponse(fileBuffer as any, { status: 200, headers })
+    const cloudbaseUrl = await getCloudbaseTempFileURL(pkg.storagePath)
+    return NextResponse.redirect(cloudbaseUrl, { status: 302 })
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error?.message || "Failed to download package" },

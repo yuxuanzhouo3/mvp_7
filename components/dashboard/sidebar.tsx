@@ -7,6 +7,7 @@ import { useTranslations } from "@/lib/i18n";
 import { categories } from "./tools-data"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { AdBanner } from "./ad-banner"
 
 interface SidebarProps {
   selectedCategory: string
@@ -31,15 +32,11 @@ export function Sidebar({
   const { language } = useLanguage();
   const t = useTranslations(language);
 
-  const ui = language === 'zh'
-    ? { account: '账户', credits: '积分', tier: '等级', membership: '升级会员' }
-    : { account: t.common?.account || 'Account', credits: t.common?.credits || 'Credits', tier: t.common?.tier || 'Tier', membership: 'Upgrade Member' }
-
-  const getCategoryName = (category: any) => {
+  const getCategoryName = (category: { id: string; nameKey: string }) => {
     if (category.id === "all") {
       return t.common?.all || category.nameKey
     }
-    return t.categories?.[category.nameKey] || category.nameKey
+    return (t.categories as any)?.[category.nameKey] || category.nameKey
   }
 
   const handleCategoryClick = (categoryId: string) => {
@@ -122,6 +119,9 @@ export function Sidebar({
         </div>
       </div>
 
+      <div className="mt-8 px-2">
+        <AdBanner placement="sidebar_bottom" />
+      </div>
     </div>
   )
 

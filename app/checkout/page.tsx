@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useLanguage } from "@/components/language-provider"
 import { useTranslations } from "@/lib/i18n"
-import { MEMBERSHIP_PLANS, MembershipPlan } from "@/lib/credits/pricing"
+import { MEMBERSHIP_PLANS, getPlanUsdPriceByRegion } from "@/lib/credits/pricing"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -21,11 +21,9 @@ export default function CheckoutPage() {
   const searchParams = useSearchParams()
   const { language } = useLanguage()
   const t = useTranslations(language)
-  const { user, updateUser } = useUser()
+  const { user } = useUser()
   
   const planId = searchParams.get('planId')
-  const cycle = searchParams.get('cycle') || 'monthly'
-  const billingCycle = cycle as 'monthly' | 'yearly'
 
   const [paymentMethod, setPaymentMethod] = useState('card')
   const [isLoading, setIsLoading] = useState(false)
@@ -52,7 +50,7 @@ export default function CheckoutPage() {
     }
   }, [planId, selectedPlan, router])
 
-  const handleSubscriptionUpgrade = async () => {
+  const handleBuyCredits = async () => {
     if (!user || !selectedPlan) {
       if (!user) {
         alert(language === 'zh' ? '请先登录' : 'Please login first')
@@ -94,10 +92,10 @@ export default function CheckoutPage() {
           userId: user.id,
           paymentMethod: apiPaymentMethod,
           planId: selectedPlan.id,
-          billingCycle,
+          billingCycle: 'monthly',
           userEmail,
-          returnUrl: `${window.location.origin}/payment/success?planId=${selectedPlan.id}&cycle=${billingCycle}`,
-          cancelUrl: `${window.location.origin}/payment/cancel?planId=${selectedPlan.id}&cycle=${billingCycle}`,
+          returnUrl: `${window.location.origin}/payment/success?planId=${selectedPlan.id}`,
+          cancelUrl: `${window.location.origin}/payment/cancel?planId=${selectedPlan.id}`,
         }),
       })
 
@@ -118,7 +116,7 @@ export default function CheckoutPage() {
         const query = new URLSearchParams({
           paymentId: String(result.orderId),
           planId: selectedPlan.id,
-          cycle: billingCycle,
+          method: apiPaymentMethod,
         })
         if (qrCode) {
           query.set('qrCodeUrl', qrCode)
@@ -152,8 +150,8 @@ export default function CheckoutPage() {
       return
 
     } catch (error) {
-      console.error('Subscription error:', error)
-      alert((error as any)?.message || 'Upgrade failed')
+      console.error('Credits purchase error:', error)
+      alert((error as any)?.message || 'Purchase failed')
     } finally {
       setIsLoading(false)
     }
@@ -161,49 +159,37 @@ export default function CheckoutPage() {
 
   if (!selectedPlan) return null;
 
-  const isYearly = billingCycle === 'yearly'
-  
-  const selectedPrice = selectedPlan
-    ? (isYearly ? selectedPlan.yearly_price : selectedPlan.monthly_price)
-    : 0
+  const selectedPrice = selectedPlan ? getPlanUsdPriceByRegion(selectedPlan, "monthly", isChinaRegion ? "CN" : "INTL") : 0
     
   const displayPrice = isChinaRegion
     ? `¥${(selectedPrice * USD_TO_CNY_RATE).toFixed(2)}`
     : `$${selectedPrice.toFixed(2)}`
     
-  const cycleLabel = isYearly
-    ? ((t.payment as any)?.yearLabel || "year")
-    : ((t.payment as any)?.monthLabel || "month")
-
   return (
     <div className="min-h-screen bg-muted/20 p-4 md:p-8">
       <div className="max-w-3xl mx-auto">
         <div className="mb-6">
             <Link href="/subscription" className="inline-flex items-center text-muted-foreground hover:text-foreground transition-colors">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                {t.payment?.chooseMembershipPlan || "Back to Plans"}
+                    {language === 'zh' ? '返回积分套餐' : 'Back to Credit Packages'}
             </Link>
         </div>
 
-        <h1 className="text-2xl font-bold mb-6">{(t.payment as any)?.summary || "Checkout"}</h1>
+        <h1 className="text-2xl font-bold mb-6">{language === 'zh' ? '积分购买结算' : 'Credits Checkout'}</h1>
 
         <div className="grid gap-6 md:grid-cols-1">
             {/* Order Summary Card */}
             <Card className="p-6">
-                <h3 className="font-semibold mb-4 text-lg">{(t.payment as any)?.summary || "Order Summary"}</h3>
+                <h3 className="font-semibold mb-4 text-lg">{language === 'zh' ? '订单摘要' : 'Order Summary'}</h3>
                 
                 <div className="space-y-4">
                     <div className="flex justify-between items-center py-2 border-b">
-                        <span className="text-muted-foreground">{t.payment?.plan || "Plan"}</span>
+                        <span className="text-muted-foreground">{language === 'zh' ? '积分包' : 'Credits Package'}</span>
                         <span className="font-semibold text-lg">{selectedPlan.name}</span>
                     </div>
                     <div className="flex justify-between items-center py-2 border-b">
-                        <span className="text-muted-foreground">{t.payment?.billing || "Billing Cycle"}</span>
-                        <span className="font-medium capitalize">{cycleLabel}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b">
-                        <span className="text-muted-foreground">{t.payment?.monthlyCredits || "Credits"}</span>
-                        <span className="font-medium">{selectedPlan.credits_per_month} / {t.payment?.mo || "mo"}</span>
+                        <span className="text-muted-foreground">{language === 'zh' ? '到账积分' : 'Credits to Receive'}</span>
+                        <span className="font-medium">{selectedPlan.credits_per_month}</span>
                     </div>
                     <div className="flex justify-between items-center pt-2">
                         <span className="font-semibold text-lg">{t.payment?.total || "Total Amount"}</span>
@@ -283,7 +269,7 @@ export default function CheckoutPage() {
 
                 <div className="mt-8">
                     <Button 
-                        onClick={handleSubscriptionUpgrade}
+                        onClick={handleBuyCredits}
                         disabled={isLoading}
                         className="w-full h-12 text-lg font-medium shadow-md"
                         size="lg"
@@ -295,12 +281,12 @@ export default function CheckoutPage() {
                         </>
                         ) : (
                         <>
-                            {t.payment?.subscribe || "Subscribe Now"}
+                            {language === 'zh' ? '立即购买积分' : 'Buy Credits Now'}
                         </>
                         )}
                     </Button>
                     <p className="text-xs text-center text-muted-foreground mt-4">
-                        {language === 'zh' ? '订阅即表示您同意我们的服务条款与' : 'By subscribing, you agree to our Terms of Service and '}
+                        {language === 'zh' ? '购买即表示您同意我们的服务条款与' : 'By purchasing, you agree to our Terms of Service and '}
                         <Link href="/privacy" className="underline hover:text-primary transition-colors">
                             {language === 'zh' ? '隐私政策' : 'Privacy Policy'}
                         </Link>

@@ -1,7 +1,7 @@
 import { resolveDeploymentRegion } from "@/lib/config/deployment-region"
 import { getDatabase, downloadFileFromCloudBase } from "@/lib/database/cloudbase-service"
 import { deleteFromCloudbaseStorage } from "@/lib/downloads/cloudbase-storage"
-import { getSupabaseAdminForDownloads, getSupabaseDownloadBucket } from "@/lib/downloads/supabase-admin"
+import { ensureSupabaseBucketExists, getSupabaseAdminForDownloads, getSupabaseDownloadBucket } from "@/lib/downloads/supabase-admin"
 import {
   CreateDownloadPackageInput,
   DownloadEventInput,
@@ -399,6 +399,7 @@ export async function recordDownloadEvent(input: DownloadEventInput): Promise<vo
 
 export async function getSupabaseSignedDownloadUrl(filePath: string): Promise<string> {
   const bucket = getSupabaseDownloadBucket()
+  await ensureSupabaseBucketExists(bucket, { public: false })
   const supabase = getSupabaseAdminForDownloads()
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(filePath, 60)
   if (error || !data?.signedUrl) {

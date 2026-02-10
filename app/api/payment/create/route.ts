@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { Client, Environment, OrdersController } from "@paypal/paypal-server-sdk"
 import { createClient } from "@supabase/supabase-js"
-import { MEMBERSHIP_PLANS, getMembershipCreditsGrant } from "@/lib/credits/pricing"
+import { MEMBERSHIP_PLANS, getCreditGrantByPlan, getPlanUsdPriceByRegion } from "@/lib/credits/pricing"
 import { resolveDeploymentRegion } from "@/lib/config/deployment-region"
 import { createWechatNativeOrder } from "@/lib/utils/wechatpay-v3-lite"
 
@@ -183,7 +183,6 @@ async function recordPendingChinaPayment(payload: {
         planId: payload.planId,
         billingCycle: payload.billingCycle,
         userEmail: payload.userEmail,
-        subscriptionTier: "pro",
       },
       created_at: now,
       updated_at: now,
@@ -266,9 +265,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid planId" }, { status: 400 })
     }
 
-    const amountUsd =
-      finalCycle === "yearly" ? Number(plan.yearly_price) : Number(plan.monthly_price)
-    const creditAmount = getMembershipCreditsGrant(plan, finalCycle)
+    const amountUsd = getPlanUsdPriceByRegion(plan, finalCycle, deploymentRegion)
+    const creditAmount = getCreditGrantByPlan(plan, finalCycle)
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || req.nextUrl.origin
     const successUrl = appendQueryParams(
@@ -295,8 +293,8 @@ export async function POST(req: NextRequest) {
             price_data: {
               currency: "usd",
               product_data: {
-                name: `${plan.name} Membership (${finalCycle})`,
-                description: `${plan.credits_per_month} credits/month`,
+                name: `${plan.name} Credits (${finalCycle})`,
+                description: `${creditAmount} credits package`,
               },
               unit_amount: Math.round(amountUsd * 100),
             },
@@ -312,7 +310,7 @@ export async function POST(req: NextRequest) {
         billingCycle: finalCycle,
         creditAmount: String(creditAmount),
         userEmail,
-        paymentType: "subscription",
+        paymentType: "credits",
       },
       })
 
@@ -374,7 +372,7 @@ export async function POST(req: NextRequest) {
                 currencyCode: "USD",
                 value: amountUsd.toFixed(2),
               },
-              description: `${plan.name} Membership (${finalCycle})`,
+              description: `${creditAmount} credits package`,
             },
           ],
           applicationContext: {
@@ -413,7 +411,7 @@ export async function POST(req: NextRequest) {
     if (finalMethod === "alipay") {
       const appId = process.env.ALIPAY_APP_ID
       const rawPrivateKey = process.env.ALIPAY_PRIVATE_KEY
-      const rawAlipayPublicKey = process.env.ALIPAY_PUBLIC_KEY
+      const rawAlipayPublicKey = process.env.ALIPAY_ALIPAY_PUBLIC_KEY || process.env.ALIPAY_PUBLIC_KEY
       const gateway = resolveAlipayGateway()
 
       if (!appId || !rawPrivateKey || !rawAlipayPublicKey) {
@@ -442,6 +440,13 @@ export async function POST(req: NextRequest) {
       const outTradeNo = `ALIPAY_${plan.id.toUpperCase()}_${Date.now()}`
       const amountCny = (amountUsd * USD_TO_CNY_RATE).toFixed(2)
 
+      const alipayReturnUrl = appendQueryParams(`${siteUrl}/payment/success`, {
+        planId: plan.id,
+        cycle: finalCycle,
+      })
+
+      const alipayNotifyUrl = `${siteUrl}/api/payment/webhook/alipay`
+
       const paymentUrlRaw = await (sdk as any).pageExec(
         "alipay.trade.page.pay",
         "GET",
@@ -450,11 +455,11 @@ export async function POST(req: NextRequest) {
             out_trade_no: outTradeNo,
             product_code: "FAST_INSTANT_TRADE_PAY",
             total_amount: amountCny,
-            subject: `${plan.name} Membership (${finalCycle})`,
+            subject: `${plan.name} Credits (${finalCycle})`,
             body: `${plan.id}-${finalCycle}-${userEmail}`,
           },
-          returnUrl: successUrl,
-          notifyUrl: `${siteUrl}/api/payment/webhook/alipay`,
+          returnUrl: alipayReturnUrl,
+          notifyUrl: alipayNotifyUrl,
         }
       )
 
@@ -501,7 +506,7 @@ export async function POST(req: NextRequest) {
       const amountInCents = Math.round(amountUsd * USD_TO_CNY_RATE * 100)
 
       const response = await createWechatNativeOrder({
-        description: `${plan.name} Membership (${finalCycle})`,
+        description: `${plan.name} Credits (${finalCycle})`,
         outTradeNo,
         notifyUrl: `${siteUrl}/api/payment/webhook/wechat`,
         amountInCents,

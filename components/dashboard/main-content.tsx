@@ -83,17 +83,22 @@ export function MainContent({
 
   return (
     <main className="flex-1 min-w-0">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-balance mb-2">
-          {selectedCategory === "all" ? t.common?.all : categories.find(c => c.id === selectedCategory) && getCategoryName(categories.find(c => c.id === selectedCategory))}
-        </h2>
-        <p className="text-muted-foreground">
-          {filteredTools.length} {t.common?.available || "available"}
-        </p>
+      <div className="flex flex-col lg:flex-row gap-4 mb-6 items-end justify-between">
+        <div className="mb-2 lg:mb-0">
+          <h2 className="text-2xl font-bold text-balance mb-2">
+            {selectedCategory === "all" ? t.common?.all : categories.find(c => c.id === selectedCategory) && getCategoryName(categories.find(c => c.id === selectedCategory))}
+          </h2>
+          <p className="text-muted-foreground">
+            {filteredTools.length} {t.common?.available || "available"}
+          </p>
+        </div>
+
+        <div className="w-full lg:w-2/3 max-w-4xl">
+          <AdBanner placement="dashboard_top" className="mb-0" />
+        </div>
       </div>
 
       {/* Tools Grid */}
-      <AdBanner />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredTools.map((tool) => {
@@ -179,6 +184,10 @@ export function MainContent({
           <p className="text-muted-foreground">{t.common?.adjustFilter || "Try adjusting your search or category filter"}</p>
         </div>
       )}
+
+      <div className="mt-8">
+        <AdBanner placement="dashboard_bottom" />
+      </div>
     </main>
   )
 }

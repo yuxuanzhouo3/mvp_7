@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { cn } from "@/lib/utils"
+import { X } from "lucide-react"
 
 type AdRecord = {
   id: string
@@ -13,7 +15,7 @@ function isValidImageUrl(url: string) {
   return /^https?:\/\//i.test(String(url || "").trim())
 }
 
-export function AdBanner({ placement = "dashboard_top" }: { placement?: string }) {
+export function AdBanner({ placement = "dashboard_top", className }: { placement?: string; className?: string }) {
   const deploymentRegion =
     String(process.env.NEXT_PUBLIC_DEPLOYMENT_REGION || "CN").toUpperCase() === "INTL"
       ? "INTL"
@@ -21,6 +23,7 @@ export function AdBanner({ placement = "dashboard_top" }: { placement?: string }
 
   const [ads, setAds] = useState<AdRecord[]>([])
   const [brokenIds, setBrokenIds] = useState<Record<string, boolean>>({})
+  const [closedIds, setClosedIds] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     const run = async () => {
@@ -40,8 +43,8 @@ export function AdBanner({ placement = "dashboard_top" }: { placement?: string }
   }, [deploymentRegion, placement])
 
   const visibleAds = useMemo(
-    () => ads.filter((ad) => isValidImageUrl(ad.imageUrl) && !brokenIds[ad.id]),
-    [ads, brokenIds]
+    () => ads.filter((ad) => isValidImageUrl(ad.imageUrl) && !brokenIds[ad.id] && !closedIds[ad.id]),
+    [ads, brokenIds, closedIds]
   )
 
   const reportClick = (adId: string) => {
@@ -61,26 +64,44 @@ export function AdBanner({ placement = "dashboard_top" }: { placement?: string }
     }).catch(() => undefined)
   }
 
+  const isCard = ["sidebar", "sidebar_bottom"].includes(placement)
+  const heightClass = isCard ? "h-48" : "h-20 md:h-24"
+
   if (!visibleAds.length) return null
 
   return (
-    <div className="mb-6 space-y-3">
+    <div className={cn("mb-6 space-y-3", className)}>
       {visibleAds.slice(0, 2).map((ad) => (
-        <a
+        <div
           key={ad.id}
-          href={ad.linkUrl}
-          target="_blank"
-          rel="noreferrer"
-          onClick={() => reportClick(ad.id)}
-          className="block overflow-hidden rounded-xl border border-border bg-card hover:shadow-md transition"
+          className="relative group block overflow-hidden rounded-xl border border-border bg-card hover:shadow-md transition"
         >
-          <img
-            src={ad.imageUrl}
-            alt={ad.title || "ad"}
-            className="w-full h-auto object-cover max-h-52"
-            onError={() => setBrokenIds((prev) => ({ ...prev, [ad.id]: true }))}
-          />
-        </a>
+          <button
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setClosedIds((prev) => ({ ...prev, [ad.id]: true }))
+            }}
+            className="absolute top-2 right-2 p-1 bg-background/80 hover:bg-background rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+            aria-label="Close ad"
+          >
+            <X className="w-3 h-3 text-muted-foreground" />
+          </button>
+          <a
+            href={ad.linkUrl}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => reportClick(ad.id)}
+            className="block"
+          >
+            <img
+              src={ad.imageUrl}
+              alt={ad.title || "ad"}
+              className={cn("w-full object-cover", heightClass)}
+              onError={() => setBrokenIds((prev) => ({ ...prev, [ad.id]: true }))}
+            />
+          </a>
+        </div>
       ))}
     </div>
   )

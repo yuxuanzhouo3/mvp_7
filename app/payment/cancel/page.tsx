@@ -17,13 +17,13 @@ export default function PaymentCancelPage() {
             href="/subscription"
             className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground"
           >
-            Retry From Plans
+            Retry Credits Purchase
           </Link>
           <Link
             href="/subscription"
             className="inline-flex w-full items-center justify-center rounded-lg border border-border px-4 py-2.5 font-medium"
           >
-            Back to Plans
+            Back to Credit Packages
           </Link>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
+import { resolveDeploymentRegion } from "@/lib/config/deployment-region"
 
 let supabaseInstance: ReturnType<typeof createClient> | null = null
 
@@ -36,6 +37,14 @@ export interface GrantCreditsResult {
 }
 
 async function grantCreditsInSupabase(options: GrantCreditsOptions): Promise<GrantCreditsResult> {
+  if (resolveDeploymentRegion() !== "INTL") {
+    return {
+      success: false,
+      error: "Supabase credits grant disabled in CN region",
+      storage: "supabase",
+    }
+  }
+
   const supabase = getSupabase()
 
   const { data: existingTx } = await supabase
@@ -101,6 +110,14 @@ async function grantCreditsInSupabase(options: GrantCreditsOptions): Promise<Gra
 }
 
 async function grantCreditsInCloudBase(options: GrantCreditsOptions): Promise<GrantCreditsResult> {
+  if (resolveDeploymentRegion() !== "CN") {
+    return {
+      success: false,
+      error: "CloudBase credits grant disabled in INTL region",
+      storage: "cloudbase",
+    }
+  }
+
   try {
     const cloudbaseService = await import("@/lib/database/cloudbase-service")
     const db = await cloudbaseService.getDatabase()
@@ -109,7 +126,25 @@ async function grantCreditsInCloudBase(options: GrantCreditsOptions): Promise<Gr
       return { success: false, error: "CloudBase unavailable" }
     }
 
-    const existingTx = await db.collection("web_credit_transactions").where({ reference_id: options.referenceId }).get()
+    let existingTx: any
+    try {
+      existingTx = await db.collection("web_credit_transactions").where({ reference_id: options.referenceId }).get()
+    } catch (error: any) {
+      const message = String(error?.message || "")
+      const code = String(error?.code || "")
+      const isMissingCollection =
+        message.includes("Db or Table not exist") ||
+        message.includes("DATABASE_COLLECTION_NOT_EXIST") ||
+        code.includes("DATABASE_COLLECTION_NOT_EXIST")
+
+      if (!isMissingCollection) {
+        throw error
+      }
+
+      await db.createCollection("web_credit_transactions")
+      existingTx = await db.collection("web_credit_transactions").where({ reference_id: options.referenceId }).get()
+    }
+
     if (existingTx?.data?.length > 0) {
       return { success: true, alreadyProcessed: true, storage: "cloudbase" }
     }
@@ -125,23 +160,67 @@ async function grantCreditsInCloudBase(options: GrantCreditsOptions): Promise<Gr
     const safeCurrentCredits = Number.isFinite(currentCredits) ? currentCredits : 0
     const newCredits = safeCurrentCredits + options.credits
 
+    console.info("[credits/cloudbase] before update:", {
+      email: options.userEmail,
+      userId: userDoc._id,
+      currentCredits: safeCurrentCredits,
+      grantCredits: options.credits,
+      targetCredits: newCredits,
+      referenceId: options.referenceId,
+    })
+
     await db.collection("web_users").doc(userDoc._id).update({
       credits: newCredits,
       updatedAt: new Date().toISOString(),
     })
 
-    await db.collection("web_credit_transactions").add({
-      user_id: userDoc._id,
-      type: "purchase",
-      amount: options.credits,
-      description: options.description,
-      reference_id: options.referenceId,
-      created_at: new Date().toISOString(),
-    })
+    const verifyUserResult = await db.collection("web_users").where({ _id: userDoc._id }).get()
+    const verifyUserDoc = verifyUserResult?.data?.[0]
+    const actualCredits = Number(verifyUserDoc?.credits ?? 0)
+
+    if (!Number.isFinite(actualCredits) || actualCredits < newCredits) {
+      return {
+        success: false,
+        error: `CloudBase credits verify failed: expected >= ${newCredits}, got ${actualCredits}`,
+        storage: "cloudbase",
+      }
+    }
+
+    try {
+      await db.collection("web_credit_transactions").add({
+        user_id: userDoc._id,
+        type: "purchase",
+        amount: options.credits,
+        description: options.description,
+        reference_id: options.referenceId,
+        created_at: new Date().toISOString(),
+      })
+    } catch (error: any) {
+      const message = String(error?.message || "")
+      const code = String(error?.code || "")
+      const isMissingCollection =
+        message.includes("Db or Table not exist") ||
+        message.includes("DATABASE_COLLECTION_NOT_EXIST") ||
+        code.includes("DATABASE_COLLECTION_NOT_EXIST")
+
+      if (!isMissingCollection) {
+        throw error
+      }
+
+      await db.createCollection("web_credit_transactions")
+      await db.collection("web_credit_transactions").add({
+        user_id: userDoc._id,
+        type: "purchase",
+        amount: options.credits,
+        description: options.description,
+        reference_id: options.referenceId,
+        created_at: new Date().toISOString(),
+      })
+    }
 
     return {
       success: true,
-      newCredits,
+      newCredits: actualCredits,
       userId: userDoc._id,
       storage: "cloudbase",
     }
@@ -154,22 +233,19 @@ async function grantCreditsInCloudBase(options: GrantCreditsOptions): Promise<Gr
 }
 
 export async function grantCreditsByEmail(options: GrantCreditsOptions): Promise<GrantCreditsResult> {
-  const supabaseResult = await grantCreditsInSupabase(options)
+  const region = resolveDeploymentRegion()
 
-  if (supabaseResult.success || supabaseResult.alreadyProcessed) {
-    return supabaseResult
+  if (region === "CN") {
+    return grantCreditsInCloudBase(options)
   }
 
-  const cloudbaseResult = await grantCreditsInCloudBase(options)
-  if (cloudbaseResult.success || cloudbaseResult.alreadyProcessed) {
-    return cloudbaseResult
-  }
-
-  return {
-    success: false,
-    error:
-      cloudbaseResult.error ||
-      supabaseResult.error ||
-      "Failed to grant credits in both Supabase and CloudBase",
+  try {
+    return await grantCreditsInSupabase(options)
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error?.message || "Supabase credits grant failed",
+      storage: "supabase",
+    }
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { getToolCreditCost } from "@/lib/credits/pricing"
+import { resolveDeploymentRegion } from "@/lib/config/deployment-region"
 
 let supabaseInstance: any = null
 
@@ -36,8 +37,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unknown toolId" }, { status: 400 })
     }
 
-    const isChinaRegion =
-      process.env.NEXT_PUBLIC_DEPLOYMENT_REGION === "CN" || process.env.NEXT_PUBLIC_DEPLOYMENT_REGION !== "INTL"
+    const isChinaRegion = resolveDeploymentRegion() === "CN"
 
     if (!isChinaRegion) {
       const supabase = getSupabase()

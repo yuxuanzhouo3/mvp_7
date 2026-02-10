@@ -4,8 +4,7 @@ import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useLanguage } from "@/components/language-provider"
 import { useTranslations } from "@/lib/i18n"
-import { MEMBERSHIP_PLANS, MembershipPlan } from "@/lib/credits/pricing"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { MEMBERSHIP_PLANS, MembershipPlan, getPlanUsdPriceByRegion } from "@/lib/credits/pricing"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -22,8 +21,7 @@ export default function SubscriptionPage() {
   const { language } = useLanguage();
   const t = useTranslations(language);
   const { user } = useUser();
-  
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly')
+
   const [selectedPlan, setSelectedPlan] = useState<MembershipPlan | null>(null)
   
   // Detect deployment region
@@ -44,22 +42,8 @@ export default function SubscriptionPage() {
 
   const handleSelectPlan = (plan: MembershipPlan) => {
     setSelectedPlan(plan)
-    router.push(`/checkout?planId=${plan.id}&cycle=${billingCycle}`)
+    router.push(`/checkout?planId=${plan.id}`)
   }
-
-  const isYearly = billingCycle === 'yearly'
-  
-  const selectedPrice = selectedPlan
-    ? (isYearly ? selectedPlan.yearly_price : selectedPlan.monthly_price)
-    : 0
-    
-  const displayPrice = isChinaRegion
-    ? `¥${(selectedPrice * USD_TO_CNY_RATE).toFixed(2)}`
-    : `$${selectedPrice.toFixed(2)}`
-    
-  const cycleLabel = isYearly
-    ? (t.payment?.yearLabel || t.payment?.year || "year")
-    : (t.payment?.monthLabel || t.payment?.month || "month")
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -73,39 +57,20 @@ export default function SubscriptionPage() {
 
             <div className="text-center mb-10">
                 <h1 className="text-3xl md:text-4xl font-bold mb-3">
-                    {t.payment?.chooseMembershipPlan || t.payment?.upgradePlan || "Choose Your Plan"}
+                    {language === 'zh' ? '选择积分套餐' : 'Choose Credits Package'}
                 </h1>
                 <p className="text-muted-foreground text-lg">
-                    {language === 'zh' ? '开启高级功能，提升创作效率' : 'Unlock premium features and boost your productivity'}
+                    {language === 'zh' ? '按需购买积分，灵活使用工具' : 'Buy credits on demand and use tools flexibly'}
                 </p>
-            </div>
-
-            <div className="flex justify-center mb-8">
-                <Tabs 
-                value={billingCycle} 
-                onValueChange={(val) => setBillingCycle(val as 'monthly' | 'yearly')}
-                className="w-full max-w-[400px]"
-                >
-                <TabsList className="grid w-full grid-cols-2 h-11">
-                    <TabsTrigger value="monthly" className="text-base">
-                    {t.payment?.monthLabel || t.payment?.month || "Monthly"}
-                    </TabsTrigger>
-                    <TabsTrigger value="yearly" className="text-base">
-                    {t.payment?.yearLabel || t.payment?.year || "Yearly"}
-                    <Badge variant="secondary" className="ml-2 bg-green-100 text-green-700 hover:bg-green-100 shadow-none border-0">
-                        -20%
-                    </Badge>
-                    </TabsTrigger>
-                </TabsList>
-                </Tabs>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
                 {MEMBERSHIP_PLANS.map((plan) => {
                 const isSelected = selectedPlan?.id === plan.id;
+                const basePrice = getPlanUsdPriceByRegion(plan, "monthly", isChinaRegion ? "CN" : "INTL")
                 const price = isChinaRegion
-                    ? `¥${((isYearly ? plan.yearly_price : plan.monthly_price) * USD_TO_CNY_RATE).toFixed(2)}`
-                    : `$${(isYearly ? plan.yearly_price : plan.monthly_price).toFixed(2)}`;
+                    ? `¥${(basePrice * USD_TO_CNY_RATE).toFixed(2)}`
+                    : `$${basePrice.toFixed(2)}`;
                 
                 return (
                     <Card 
@@ -130,10 +95,9 @@ export default function SubscriptionPage() {
                         <CardTitle className="text-xl font-bold">{plan.name}</CardTitle>
                         <div className="flex items-baseline justify-center gap-1 mt-2">
                         <span className="text-3xl font-bold">{price}</span>
-                        <span className="text-muted-foreground text-sm">/{isYearly ? (t.payment?.yr || "yr") : (t.payment?.mo || "mo")}</span>
                         </div>
                         <p className="text-sm font-medium text-muted-foreground mt-2">
-                        {plan.credits_per_month} {language === 'zh' ? '积分/月' : 'credits/month'}
+                        {plan.credits_per_month} {language === 'zh' ? '积分' : 'credits'}
                         </p>
                     </CardHeader>
                     
@@ -156,8 +120,8 @@ export default function SubscriptionPage() {
                         onClick={() => handleSelectPlan(plan)}
                         >
                         {isSelected 
-                            ? (t.common?.selected || "Selected") 
-                            : (t.common?.select || "Select Plan")}
+                            ? ((t.common as any)?.selected || "Selected") 
+                            : (language === 'zh' ? '选择积分包' : 'Select Credits Package')}
                         </Button>
                     </CardFooter>
                     </Card>

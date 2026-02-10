@@ -5,6 +5,9 @@ export const AD_PLACEMENTS = [
   "downloads_top",
   "downloads_bottom",
   "sidebar",
+  "sidebar_bottom",
+  "tool_top",
+  "tool_bottom",
 ] as const
 
 export type AdPlacement = (typeof AD_PLACEMENTS)[number]

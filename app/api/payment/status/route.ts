@@ -2,39 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { resolveDeploymentRegion } from "@/lib/config/deployment-region"
 import { getDatabase } from "@/lib/database/cloudbase-service"
 import { queryWechatOrderByOutTradeNo } from "@/lib/utils/wechatpay-v3-lite"
-import { updateCloudbaseSubscription } from "@/app/api/payment/lib/update-cloudbase-subscription"
-import { getMembershipPlanById, getMembershipCreditsGrant } from "@/lib/credits/pricing"
+import { applyCnPaymentCredits } from "@/app/api/payment/lib/cn-payment-credits"
 
 export const runtime = "nodejs"
-
-function resolveDaysByBillingCycle(value?: string): number {
-  return value === "yearly" ? 365 : 30
-}
-
-async function resolvePaymentUserId(db: any, paymentRecord: any): Promise<string | null> {
-  const rawUserId = String(paymentRecord?.user_id || "").trim()
-  if (rawUserId) {
-    const directUser = await db.collection("web_users").where({ _id: rawUserId }).get()
-    if ((directUser?.data?.length || 0) > 0) {
-      return rawUserId
-    }
-  }
-
-  const email = String(paymentRecord?.user_email || "").trim()
-  if (!email) return null
-
-  const userResult = await db.collection("web_users").where({ email }).get()
-  const userId = userResult?.data?.[0]?._id ? String(userResult.data[0]._id) : null
-
-  if (userId && paymentRecord?.out_trade_no) {
-    await db.collection("payments").where({ out_trade_no: paymentRecord.out_trade_no }).update({
-      user_id: userId,
-      updated_at: new Date().toISOString(),
-    })
-  }
-
-  return userId
-}
 
 function mapTradeStateToStatus(tradeState?: string): "pending" | "completed" | "failed" | "refunded" | "unknown" {
   const state = String(tradeState || "").toUpperCase()
@@ -45,9 +15,71 @@ function mapTradeStateToStatus(tradeState?: string): "pending" | "completed" | "
   return "unknown"
 }
 
+function normalizePemKey(raw?: string) {
+  if (!raw) return ""
+  const value = raw.trim().replace(/\\n/g, "\n")
+  return value || ""
+}
+
+function resolveAlipayGateway() {
+  const sandboxFlag = String(process.env.ALIPAY_SANDBOX || "").toLowerCase() === "true"
+  const explicitGateway = process.env.ALIPAY_GATEWAY || process.env.ALIPAY_GATEWAY_URL
+
+  if (explicitGateway && explicitGateway.trim()) {
+    return explicitGateway.trim()
+  }
+
+  if (sandboxFlag) {
+    return "https://openapi-sandbox.dl.alipaydev.com/gateway.do"
+  }
+
+  return "https://openapi.alipay.com/gateway.do"
+}
+
+async function queryAlipayTrade(outTradeNo: string) {
+  const appId = process.env.ALIPAY_APP_ID
+  const rawPrivateKey = process.env.ALIPAY_PRIVATE_KEY
+  const rawAlipayPublicKey = process.env.ALIPAY_ALIPAY_PUBLIC_KEY || process.env.ALIPAY_PUBLIC_KEY
+
+  if (!appId || !rawPrivateKey || !rawAlipayPublicKey) {
+    throw new Error("Alipay config missing")
+  }
+
+  const privateKey = normalizePemKey(rawPrivateKey)
+  const alipayPublicKey = normalizePemKey(rawAlipayPublicKey)
+  const gateway = resolveAlipayGateway()
+
+  const { AlipaySdk } = await import("alipay-sdk")
+  const sdk = new AlipaySdk({
+    appId,
+    privateKey,
+    alipayPublicKey,
+    gateway,
+  })
+
+  const result = await (sdk as any).exec("alipay.trade.query", {
+    bizContent: { out_trade_no: outTradeNo },
+  })
+
+  const body =
+    result?.alipay_trade_query_response ||
+    result?.response ||
+    result ||
+    {}
+
+  return body
+}
+
 export async function GET(request: NextRequest) {
   try {
     const paymentId = request.nextUrl.searchParams.get("paymentId")
+    const requestedMethodRaw = String(request.nextUrl.searchParams.get("method") || "").toLowerCase()
+    const requestedMethod =
+      requestedMethodRaw === "wechatpay"
+        ? "wechat"
+        : requestedMethodRaw === "alipay"
+          ? "alipay"
+          : requestedMethodRaw
     if (!paymentId) {
       return NextResponse.json(
         { success: false, error: "paymentId is required", status: "unknown" },
@@ -57,7 +89,7 @@ export async function GET(request: NextRequest) {
 
     if (resolveDeploymentRegion() !== "CN") {
       return NextResponse.json(
-        { success: false, error: "Status API currently supports CN WeChat payments only", status: "unknown" },
+        { success: false, error: "Status API only available in CN", status: "unknown" },
         { status: 400 }
       )
     }
@@ -86,54 +118,106 @@ export async function GET(request: NextRequest) {
     let tradeState: string | null = null
     let transactionId: string | null = paymentRecord?.transaction_id || null
 
-    try {
-      const wechatResp: any = await queryWechatOrderByOutTradeNo(paymentId)
-      tradeState = wechatResp?.trade_state || null
-      transactionId = wechatResp?.transaction_id || transactionId
+    const persistedMethodRaw = String(paymentRecord?.payment_method || "").toLowerCase()
+    const persistedMethod =
+      persistedMethodRaw === "wechatpay"
+        ? "wechat"
+        : persistedMethodRaw === "alipay"
+          ? "alipay"
+          : persistedMethodRaw
 
-      const remoteStatus = mapTradeStateToStatus(tradeState || undefined)
-      if (remoteStatus !== "unknown") {
-        finalStatus = remoteStatus
-      }
+    const method = requestedMethod || persistedMethod
 
-      if (finalStatus === "completed" && localStatus !== "completed") {
-        await db.collection("payments").where({ out_trade_no: paymentId }).update({
-          status: "completed",
-          transaction_id: transactionId,
-          updated_at: new Date().toISOString(),
-        })
-      }
+    console.info("[payment/status] method resolved:", {
+      paymentId,
+      requestedMethodRaw,
+      requestedMethod,
+      persistedMethodRaw,
+      persistedMethod,
+      finalMethod: method,
+      localStatus,
+    })
 
-      const benefitApplied = Boolean(paymentRecord?.membership_applied)
-      if (finalStatus === "completed" && !benefitApplied) {
-        const resolvedUserId = await resolvePaymentUserId(db, paymentRecord)
-        const billingCycle =
-          paymentRecord?.billing_cycle || paymentRecord?.metadata?.billingCycle || "monthly"
+    if (method === "wechat") {
+      try {
+        const wechatResp: any = await queryWechatOrderByOutTradeNo(paymentId)
+        tradeState = wechatResp?.trade_state || null
+        transactionId = wechatResp?.transaction_id || transactionId
 
-        if (resolvedUserId) {
-          const planId = String(paymentRecord?.plan_type || paymentRecord?.metadata?.planId || "pro")
-          const plan = getMembershipPlanById(planId)
-          const creditsToAdd = plan ? getMembershipCreditsGrant(plan, billingCycle) : 0
+        const remoteStatus = mapTradeStateToStatus(tradeState || undefined)
+        if (remoteStatus !== "unknown") {
+          finalStatus = remoteStatus
+        }
 
-          const subscriptionResult = await updateCloudbaseSubscription({
-            userId: resolvedUserId,
-            days: resolveDaysByBillingCycle(billingCycle),
-            creditsToAdd,
-            transactionId: transactionId || paymentId,
-            provider: "wechat",
-            currentDate: new Date(),
+        if (finalStatus === "completed" && localStatus !== "completed") {
+          await db.collection("payments").where({ out_trade_no: paymentId }).update({
+            status: "completed",
+            transaction_id: transactionId,
+            updated_at: new Date().toISOString(),
           })
+        }
+      } catch (error) {
+        console.error("[payment/status] wechat query failed, fallback local status:", error)
+      }
+    }
 
-          if (subscriptionResult.success) {
+    if (method === "alipay" && finalStatus !== "completed") {
+      try {
+        const alipayTrade = await queryAlipayTrade(paymentId)
+        const alipayStatus = String(alipayTrade?.trade_status || "").toUpperCase()
+
+        if (alipayStatus === "TRADE_SUCCESS" || alipayStatus === "TRADE_FINISHED") {
+          finalStatus = "completed"
+          transactionId = String(alipayTrade?.trade_no || transactionId || "") || transactionId
+          tradeState = alipayStatus
+
+          if (localStatus !== "completed") {
             await db.collection("payments").where({ out_trade_no: paymentId }).update({
-              membership_applied: true,
+              status: "completed",
+              transaction_id: transactionId,
               updated_at: new Date().toISOString(),
             })
           }
         }
+      } catch (error) {
+        console.error("[payment/status] alipay query failed, fallback local status:", error)
       }
-    } catch (error) {
-      console.error("[payment/status] wechat query failed, fallback local status:", error)
+    }
+
+    if (finalStatus === "completed" && !paymentRecord?.credits_applied) {
+      const referencePrefix = method === "alipay" ? "alipay" : "wechat"
+      const applyResult = await applyCnPaymentCredits({
+        db,
+        paymentRecord: {
+          ...paymentRecord,
+          transaction_id: transactionId || paymentRecord?.transaction_id,
+        },
+        referenceId: `${referencePrefix}_${transactionId || paymentId}`,
+      })
+
+      if (!applyResult.success) {
+        console.error("[payment/status] apply credits failed:", {
+          paymentId,
+          transactionId,
+          method,
+          error: applyResult.error,
+          userEmail: applyResult.userEmail,
+          planId: applyResult.planId,
+          billingCycle: applyResult.billingCycle,
+          creditsToAdd: applyResult.creditsToAdd,
+        })
+      } else {
+        console.info("[payment/status] apply credits success:", {
+          paymentId,
+          transactionId,
+          method,
+          userEmail: applyResult.userEmail,
+          planId: applyResult.planId,
+          billingCycle: applyResult.billingCycle,
+          creditsToAdd: applyResult.creditsToAdd,
+          alreadyProcessed: applyResult.alreadyProcessed,
+        })
+      }
     }
 
     return NextResponse.json({
@@ -143,7 +227,7 @@ export async function GET(request: NextRequest) {
       tradeState,
       transactionId,
       webhookConfirmed: Boolean(paymentRecord?.webhook_confirmed),
-      method: paymentRecord?.payment_method || "wechat",
+      method: method || paymentRecord?.payment_method || "unknown",
       amount: paymentRecord?.amount,
       currency: paymentRecord?.currency,
       createdAt: paymentRecord?.created_at,

@@ -20,7 +20,7 @@ import {
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu"
 import { getSupabaseClient } from "@/lib/supabase"
-import { Search, Zap, User, Menu, Sparkles, Settings2, Globe, Moon, Sun, Check, Coins, CalendarClock, Download, Shield } from "lucide-react"
+import { Search, Zap, User, Menu, Sparkles, Settings2, Globe, Moon, Sun, Check, Coins, Download, Shield } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Sidebar } from "./sidebar"
 
@@ -57,8 +57,8 @@ export function Header({
   const { setTheme, theme } = useTheme();
   const { setLanguage } = useLanguage();
   const ui = language === 'zh'
-    ? { account: '账户', credits: '积分', tier: '等级', logout: '退出登录', expiresAt: t.user?.expiresAt || '到期时间', noMembership: t.user?.noMembership || '未开通会员' }
-    : { account: 'Account', credits: t.common?.credits || 'Credits', tier: 'Tier', logout: 'Logout', expiresAt: t.user?.expiresAt || 'Expires at', noMembership: t.user?.noMembership || 'No membership' }
+    ? { account: '账户', credits: '积分', logout: '退出登录' }
+    : { account: 'Account', credits: t.common?.credits || 'Credits', logout: 'Logout' }
 
   const [isSheetOpen, setIsSheetOpen] = useState(false)
 
@@ -70,32 +70,6 @@ export function Header({
 
     if (!user?.email || whitelist.length === 0) return false
     return whitelist.includes(String(user.email).toLowerCase())
-  })()
-
-  const isMember = (() => {
-    if (!user) return false
-
-    const tier = String(user?.subscription_tier || user?.tier || "free").toLowerCase()
-    if (["basic", "pro", "business", "admin"].includes(tier)) {
-      return true
-    }
-
-    if (Boolean(user?.pro)) {
-      return true
-    }
-
-    const rawExpiresAt =
-      user?.subscription_expires_at ||
-      user?.membership_expires_at ||
-      user?.expire_time ||
-      user?.current_period_end
-
-    if (!rawExpiresAt) return false
-
-    const parsed = new Date(rawExpiresAt)
-    if (Number.isNaN(parsed.getTime())) return false
-
-    return parsed.getTime() > Date.now()
   })()
 
   const handleCloseSheet = () => {
@@ -118,42 +92,6 @@ export function Header({
     const parts = label.includes("@") ? [label.split("@")[0]] : label.split(/\s+/).filter(Boolean)
     const initials = parts.slice(0, 2).map((p: string) => p[0]?.toUpperCase()).join("")
     return initials || "U"
-  }
-
-  const getTierLabel = (u: any) => {
-    const tier = (u?.subscription_tier || u?.tier || "free").toString()
-    if (tier === "admin") return "Admin"
-    if (tier === "pro") return "Pro"
-    if (tier === "basic") return "Basic"
-    if (tier === "business") return "Business"
-    return "Free"
-  }
-
-  const getMembershipExpireDisplay = (u: any) => {
-    const rawExpiresAt =
-      u?.subscription_expires_at ||
-      u?.membership_expires_at ||
-      u?.expire_time ||
-      u?.current_period_end
-
-    if (!rawExpiresAt) {
-      return ui.noMembership
-    }
-
-    const parsed = new Date(rawExpiresAt)
-    if (Number.isNaN(parsed.getTime())) {
-      return String(rawExpiresAt)
-    }
-
-    const locale = language === 'zh' ? 'zh-CN' : 'en-US'
-    return new Intl.DateTimeFormat(locale, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(parsed)
   }
 
   const handleLogout = async () => {
@@ -242,15 +180,13 @@ export function Header({
 
               {user && (
                 <>
-                  {!isMember ? (
-                    <Button
-                      onClick={() => router.push('/subscription')}
-                      className="hidden md:flex h-9 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white border-none shadow-lg shadow-purple-500/20 font-medium transition-all hover:scale-105 active:scale-95"
-                    >
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      {language === 'zh' ? '升级会员' : 'Upgrade Plan'}
-                    </Button>
-                  ) : null}
+                  <Button
+                    onClick={() => router.push('/subscription')}
+                    className="hidden md:flex h-9"
+                    variant="outline"
+                  >
+                    {language === 'zh' ? '购买积分' : 'Buy Credits'}
+                  </Button>
 
                   <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 hover:bg-muted rounded-lg border border-border/50 transition-all group cursor-default">
                     <div className="flex items-center justify-center w-5 h-5 bg-amber-500/10 rounded-full">
@@ -345,12 +281,8 @@ export function Header({
                       {ui.credits}: {user?.credits}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => router.push('/subscription')} className="text-primary font-medium focus:text-primary">
-                      <Sparkles className="mr-2 h-4 w-4 fill-primary/20" />
-                      {language === 'zh' ? `会员等级: ${getTierLabel(user)}` : `Tier: ${getTierLabel(user)}`}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem disabled className="opacity-70">
-                      <CalendarClock className="mr-2 h-4 w-4" />
-                      {ui.expiresAt}: {getMembershipExpireDisplay(user)}
+                      <Coins className="mr-2 h-4 w-4" />
+                      {language === 'zh' ? '购买积分' : 'Buy Credits'}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">

@@ -2,10 +2,28 @@ import { NextRequest, NextResponse } from "next/server"
 import crypto from "crypto"
 import { resolveDeploymentRegion } from "@/lib/config/deployment-region"
 import { getDatabase } from "@/lib/database/cloudbase-service"
-import { updateCloudbaseSubscription } from "@/app/api/payment/lib/update-cloudbase-subscription"
-import { getMembershipPlanById, getMembershipCreditsGrant } from "@/lib/credits/pricing"
+import { applyCnPaymentCredits } from "@/app/api/payment/lib/cn-payment-credits"
 
 export const runtime = "nodejs"
+
+async function ensureCloudbaseCollection(db: any, collectionName: string) {
+  try {
+    await db.collection(collectionName).limit(1).get()
+  } catch (error: any) {
+    const message = String(error?.message || "")
+    const code = String(error?.code || "")
+    const isMissingCollection =
+      message.includes("Db or Table not exist") ||
+      message.includes("DATABASE_COLLECTION_NOT_EXIST") ||
+      code.includes("DATABASE_COLLECTION_NOT_EXIST")
+
+    if (!isMissingCollection) {
+      throw error
+    }
+
+    await db.createCollection(collectionName)
+  }
+}
 
 function parseWechatWebhookPayload(rawBody: string): any {
   const data = JSON.parse(rawBody)
@@ -47,35 +65,6 @@ function parseWechatWebhookPayload(rawBody: string): any {
   return data
 }
 
-function resolveDaysByBillingCycle(value?: string): number {
-  return value === "yearly" ? 365 : 30
-}
-
-async function resolvePaymentUserId(db: any, paymentRecord: any): Promise<string | null> {
-  const rawUserId = String(paymentRecord?.user_id || "").trim()
-  if (rawUserId) {
-    const directUser = await db.collection("web_users").where({ _id: rawUserId }).get()
-    if ((directUser?.data?.length || 0) > 0) {
-      return rawUserId
-    }
-  }
-
-  const email = String(paymentRecord?.user_email || "").trim()
-  if (!email) return null
-
-  const userResult = await db.collection("web_users").where({ email }).get()
-  const userId = userResult?.data?.[0]?._id ? String(userResult.data[0]._id) : null
-
-  if (userId && paymentRecord?.out_trade_no) {
-    await db.collection("payments").where({ out_trade_no: paymentRecord.out_trade_no }).update({
-      user_id: userId,
-      updated_at: new Date().toISOString(),
-    })
-  }
-
-  return userId
-}
-
 export async function POST(request: NextRequest) {
   try {
     if (resolveDeploymentRegion() !== "CN") {
@@ -106,6 +95,8 @@ export async function POST(request: NextRequest) {
     }
 
     const db = await getDatabase()
+    await ensureCloudbaseCollection(db, "webhook_events")
+
     const webhookEventId = `wechat_${transactionId}`
 
     const existingEvent = await db.collection("webhook_events").where({ id: webhookEventId }).get()
@@ -132,53 +123,36 @@ export async function POST(request: NextRequest) {
     const paymentResult = await db.collection("payments").where({ out_trade_no: outTradeNo }).get()
     const paymentRecord = paymentResult?.data?.[0]
 
-    const resolvedUserId = await resolvePaymentUserId(db, paymentRecord)
-
-    if (!resolvedUserId) {
-      await db.collection("webhook_events").where({ id: webhookEventId }).update({
-        processed: true,
-        processed_at: new Date().toISOString(),
-        error_message: "payment record missing user_id",
-      })
-
-      return NextResponse.json(
-        { code: "FAIL", message: "Payment record missing user_id" },
-        { status: 400 }
-      )
-    }
-
-    const billingCycle =
-      paymentRecord.billing_cycle || paymentRecord.metadata?.billingCycle || "monthly"
-    const planId = String(paymentRecord?.plan_type || paymentRecord?.metadata?.planId || "pro")
-    const plan = getMembershipPlanById(planId)
-    const creditsToAdd = plan ? getMembershipCreditsGrant(plan, billingCycle) : 0
-
-    const subscriptionResult = await updateCloudbaseSubscription({
-      userId: resolvedUserId,
-      days: resolveDaysByBillingCycle(billingCycle),
-      creditsToAdd,
-      transactionId,
-      provider: "wechat",
-      currentDate: new Date(),
+    const applyResult = await applyCnPaymentCredits({
+      db,
+      paymentRecord,
+      referenceId: `wechat_${transactionId}`,
     })
 
-    if (subscriptionResult.success) {
-      await db.collection("payments").where({ out_trade_no: outTradeNo }).update({
-        membership_applied: true,
-        updated_at: new Date().toISOString(),
-      })
-    } else {
+    if (!applyResult.success) {
       await db.collection("webhook_events").where({ id: webhookEventId }).update({
         processed: true,
         processed_at: new Date().toISOString(),
-        error_message: subscriptionResult.error || "failed to apply membership",
+        error_message: applyResult.error || "failed to apply credits",
       })
 
       return NextResponse.json(
-        { code: "FAIL", message: subscriptionResult.error || "Membership apply failed" },
+        { code: "FAIL", message: applyResult.error || "Credits apply failed" },
         { status: 500 }
       )
     }
+
+    console.info("[wechat/webhook] apply credits result:", {
+      outTradeNo,
+      transactionId,
+      userEmail: applyResult.userEmail,
+      planId: applyResult.planId,
+      billingCycle: applyResult.billingCycle,
+      creditsToAdd: applyResult.creditsToAdd,
+      success: applyResult.success,
+      alreadyProcessed: applyResult.alreadyProcessed,
+      error: applyResult.error,
+    })
 
     await db.collection("webhook_events").where({ id: webhookEventId }).update({
       processed: true,

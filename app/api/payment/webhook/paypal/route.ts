@@ -133,6 +133,39 @@ async function verifyPayPalSignature(args: {
   return verifyData.verification_status === "SUCCESS"
 }
 
+
+async function saveWebhookEventSafe(options: {
+  provider: "paypal"
+  eventId: string
+  eventType: string
+  transactionId?: string
+  payload: any
+  status: "received" | "processed" | "failed" | "ignored"
+  errorMessage?: string
+}) {
+  try {
+    await saveWebhookEvent(options)
+  } catch (error) {
+    console.error("[paypal/webhook] save webhook event fatal:", error)
+  }
+}
+
+export async function GET() {
+  if (resolveDeploymentRegion() !== "INTL") {
+    return NextResponse.json({ status: "ignored", reason: "not_intl" }, { status: 200 })
+  }
+
+  await saveWebhookEventSafe({
+    provider: "paypal",
+    eventId: `paypal_health_${Date.now()}`,
+    eventType: "healthcheck",
+    payload: { source: "manual_get" },
+    status: "ignored",
+  })
+
+  return NextResponse.json({ status: "ok", provider: "paypal" })
+}
+
 function parseCycle(value?: string): "monthly" | "yearly" {
   return value === "yearly" ? "yearly" : "monthly"
 }
@@ -142,6 +175,15 @@ export async function POST(request: NextRequest) {
 
   try {
     if (resolveDeploymentRegion() !== "INTL") {
+      await saveWebhookEventSafe({
+        provider: "paypal",
+        eventId: `paypal_region_${Date.now()}`,
+        eventType: "region_rejected",
+        payload: { source: "webhook", region: resolveDeploymentRegion() },
+        status: "failed",
+        errorMessage: "PayPal webhook only available in INTL",
+      })
+
       return NextResponse.json({ error: "PayPal webhook only available in INTL" }, { status: 403 })
     }
 
@@ -152,6 +194,17 @@ export async function POST(request: NextRequest) {
     const transmissionId = request.headers.get("paypal-transmission-id")
     const timestamp = request.headers.get("paypal-transmission-time")
     const authAlgo = request.headers.get("paypal-auth-algo")
+
+    const parsedPayload = (() => {
+      try {
+        return rawBody ? JSON.parse(rawBody) : null
+      } catch {
+        return null
+      }
+    })()
+
+    const eventId = parsedPayload?.id || transmissionId || `paypal_${Date.now()}`
+    const eventType = parsedPayload?.event_type || "unknown"
 
     const isValid =
       process.env.PAYPAL_SKIP_SIGNATURE_VERIFICATION === "true"
@@ -166,12 +219,19 @@ export async function POST(request: NextRequest) {
           })
 
     if (!isValid) {
+      await saveWebhookEventSafe({
+        provider: "paypal",
+        eventId,
+        eventType,
+        payload: parsedPayload || { rawBody },
+        status: "failed",
+        errorMessage: "Invalid signature",
+      })
+
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
     }
 
-    const webhookData = JSON.parse(rawBody)
-    const eventId = webhookData?.id || transmissionId || `paypal_${Date.now()}`
-    const eventType = webhookData?.event_type || "unknown"
+    const webhookData = parsedPayload || JSON.parse(rawBody)
 
     const supportedEvents = new Set([
       "CHECKOUT.ORDER.APPROVED",
@@ -179,14 +239,17 @@ export async function POST(request: NextRequest) {
     ])
 
     const resource = webhookData?.resource || {}
+    const relatedOrderId = resource?.supplementary_data?.related_ids?.order_id
+    const captureId = resource?.id
     const orderId =
-      resource?.id ||
-      resource?.supplementary_data?.related_ids?.order_id ||
+      relatedOrderId ||
       resource?.invoice_id ||
+      resource?.custom_id ||
+      captureId ||
       undefined
 
     if (!supportedEvents.has(eventType)) {
-      await saveWebhookEvent({
+      await saveWebhookEventSafe({
         provider: "paypal",
         eventId,
         eventType,
@@ -199,7 +262,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!orderId) {
-      await saveWebhookEvent({
+      await saveWebhookEventSafe({
         provider: "paypal",
         eventId,
         eventType,
@@ -212,23 +275,44 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin()
-    const { data: pendingTx } = await supabase
-      .from("payment_transactions")
-      .select("user_email, plan_type, billing_cycle")
-      .eq("transaction_id", orderId)
-      .maybeSingle()
+
+    const txCandidates = [orderId, relatedOrderId, captureId]
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      .map((value) => value.trim())
+
+    let pendingTx: any = null
+    for (const txId of txCandidates) {
+      const { data } = await supabase
+        .from("payment_transactions")
+        .select("user_email, plan_type, billing_cycle")
+        .eq("transaction_id", txId)
+        .maybeSingle()
+
+      if (data) {
+        pendingTx = data
+        break
+      }
+    }
 
     const userEmail = pendingTx?.user_email
     const planId = pendingTx?.plan_type
     const billingCycle = parseCycle(pendingTx?.billing_cycle)
 
     if (!userEmail || !planId) {
-      await saveWebhookEvent({
+      await saveWebhookEventSafe({
         provider: "paypal",
         eventId,
         eventType,
         transactionId: orderId,
-        payload: webhookData,
+        payload: {
+          ...webhookData,
+          _debug: {
+            orderId,
+            relatedOrderId,
+            captureId,
+            txCandidates,
+          },
+        },
         status: "failed",
         errorMessage: "No pending transaction found for webhook order id",
       })
@@ -239,7 +323,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    await saveWebhookEvent({
+    await saveWebhookEventSafe({
       provider: "paypal",
       eventId,
       eventType,
@@ -256,7 +340,7 @@ export async function POST(request: NextRequest) {
       paymentMethod: "paypal",
     })
 
-    await saveWebhookEvent({
+    await saveWebhookEventSafe({
       provider: "paypal",
       eventId,
       eventType,
@@ -276,7 +360,7 @@ export async function POST(request: NextRequest) {
       const transactionId =
         parsed?.resource?.id || parsed?.resource?.supplementary_data?.related_ids?.order_id
 
-      await saveWebhookEvent({
+      await saveWebhookEventSafe({
         provider: "paypal",
         eventId,
         eventType,

@@ -6,6 +6,7 @@ import { ThemeSwitch } from "@/components/theme-switch"
 import { useLanguage } from "@/components/language-provider";
 import { useTranslations } from '@/lib/i18n'
 import { getTranslations } from '@/lib/i18n'
+import { AdBanner } from "@/components/dashboard/ad-banner"
 
 interface ToolLayoutProps {
   title: string
@@ -105,7 +106,13 @@ export function ToolLayout({ title, description, category, creditCost, children 
         </header>
 
         {/* Main Content */}
-        <main className="container mx-auto px-4 py-6 md:px-6 md:py-8">{children}</main>
+        <main className="container mx-auto px-4 py-6 md:px-6 md:py-8">
+          <AdBanner placement="tool_top" />
+          {children}
+          <div className="mt-8">
+            <AdBanner placement="tool_bottom" />
+          </div>
+        </main>
       </div>
   )
 }

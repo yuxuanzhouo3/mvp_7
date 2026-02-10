@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { resolveDeploymentRegion } from '@/lib/config/deployment-region';
 
 // 延迟初始化 Supabase 客户端
 let supabaseInstance: any = null;
@@ -32,8 +33,7 @@ export async function POST(req: NextRequest) {
         }
 
         // 检测部署区域
-        const region = (process.env.NEXT_PUBLIC_DEPLOYMENT_REGION || process.env.DEPLOYMENT_REGION || 'CN').toUpperCase();
-        const isChinaRegion = region === 'CN';
+        const isChinaRegion = resolveDeploymentRegion() === 'CN';
 
         if (!isChinaRegion) {
             // 更新 Supabase 数据库
