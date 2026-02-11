@@ -136,6 +136,16 @@ export const tools: Tool[] = [
   },
 ];
 
+
+export const hiddenHomeToolIds = [
+  "text-multi-sender",
+  "social-auto-poster",
+] as const
+
+const hiddenHomeToolIdSet = new Set<string>(hiddenHomeToolIds)
+
+export const homeVisibleTools: Tool[] = tools.filter((tool) => !hiddenHomeToolIdSet.has(tool.id))
+
 // 定义分类
 export const categories = [
   {
@@ -143,42 +153,42 @@ export const categories = [
     nameKey: "all",
     icon: Zap,
     color: "text-foreground",
-    count: tools.length,
+    count: homeVisibleTools.length,
   },
   {
     id: "job-application",
     nameKey: "jobApplication",
     icon: Briefcase,
     color: "text-[color:var(--job-application)]",
-    count: tools.filter((t) => t.category === "job-application").length,
+    count: homeVisibleTools.filter((t) => t.category === "job-application").length,
   },
   {
     id: "social-media",
     nameKey: "socialMedia",
     icon: Users,
     color: "text-[color:var(--social-media)]",
-    count: tools.filter((t) => t.category === "social-media").length,
+    count: homeVisibleTools.filter((t) => t.category === "social-media").length,
   },
   {
     id: "data-extraction",
     nameKey: "dataExtraction",
     icon: Database,
     color: "text-[color:var(--data-extraction)]",
-    count: tools.filter((t) => t.category === "data-extraction").length,
+    count: homeVisibleTools.filter((t) => t.category === "data-extraction").length,
   },
   {
     id: "file-converters",
     nameKey: "fileConverters",
     icon: Download,
     color: "text-[color:var(--file-converters)]",
-    count: tools.filter((t) => t.category === "file-converters").length,
+    count: homeVisibleTools.filter((t) => t.category === "file-converters").length,
   },
   {
     id: "productivity",
     nameKey: "productivity",
     icon: Settings,
     color: "text-[color:var(--productivity)]",
-    count: tools.filter((t) => t.category === "productivity").length,
+    count: homeVisibleTools.filter((t) => t.category === "productivity").length,
   },
 ];
 

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useLanguage } from "@/components/language-provider";
 import { useTranslations } from "@/lib/i18n";
-import { categories, tools, Tool } from "./tools-data"
+import { categories, homeVisibleTools, Tool } from "./tools-data"
 import { getToolCreditCost } from "@/lib/credits/pricing"
 import { Star, Clock, Search } from "lucide-react"
 import { AdBanner } from "./ad-banner"
@@ -45,7 +45,7 @@ export function MainContent({
   const getToolDescription = (tool: Tool) => t.tools?.[tool.nameKey]?.description || tool.nameKey
   const getCategoryName = (category: any) => t.categories?.[category.nameKey] || category.nameKey
 
-  const filteredTools = tools.filter((tool) => {
+  const filteredTools = homeVisibleTools.filter((tool) => {
     const toolName = getToolName(tool)
     const toolDesc = getToolDescription(tool)
     const matchesSearch =

@@ -39,6 +39,11 @@ export function Sidebar({
     return (t.categories as any)?.[category.nameKey] || category.nameKey
   }
 
+  const visibleCategories = categories.filter((category) => {
+    if (category.id === "all") return true
+    return Number(category.count || 0) > 0
+  })
+
   const handleCategoryClick = (categoryId: string) => {
     setSelectedCategory(categoryId)
     if (isMobile && closeSheet) {
@@ -64,7 +69,7 @@ export function Sidebar({
       )}
 
       <nav className="space-y-1">
-        {categories.map((category) => {
+        {visibleCategories.map((category) => {
           const Icon = category.icon;
           const isActive = selectedCategory === category.id;
           return (

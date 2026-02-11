@@ -143,32 +143,231 @@ Best regards,
     },
   ]
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+  const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
+  const DELIMITERS = [",", "\t", ";", "|"]
+
+  const normalizeEmail = (value: string) => {
+    return value
+      .trim()
+      .replace(/^[<(（【\[]+/, "")
+      .replace(/[>)）】\],，。;；]+$/g, "")
+      .toLowerCase()
+  }
+
+  const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
+  const extractEmails = (value: string): string[] => {
+    const matches = String(value || "").match(EMAIL_REGEX) || []
+    const uniq = new Set<string>()
+
+    for (const item of matches) {
+      const normalized = normalizeEmail(item)
+      if (normalized.includes("@")) {
+        uniq.add(normalized)
+      }
+    }
+
+    return Array.from(uniq)
+  }
+
+  const detectDelimiter = (line: string): string => {
+    let selected = ","
+    let maxCount = 0
+
+    for (const delimiter of DELIMITERS) {
+      const count = (line.split(delimiter).length - 1)
+      if (count > maxCount) {
+        maxCount = count
+        selected = delimiter
+      }
+    }
+
+    return maxCount > 0 ? selected : ","
+  }
+
+  const parseDelimitedRow = (line: string, delimiter: string): string[] => {
+    const result: string[] = []
+    let current = ""
+    let inQuotes = false
+
+    for (let index = 0; index < line.length; index++) {
+      const char = line[index]
+      const next = line[index + 1]
+
+      if (char === '"') {
+        if (inQuotes && next === '"') {
+          current += '"'
+          index += 1
+        } else {
+          inQuotes = !inQuotes
+        }
+        continue
+      }
+
+      if (char === delimiter && !inQuotes) {
+        result.push(current.trim())
+        current = ""
+        continue
+      }
+
+      current += char
+    }
+
+    result.push(current.trim())
+    return result.map((cell) => cell.replace(/^"(.*)"$/, "$1").trim())
+  }
+
+  const deriveNameFromLine = (line: string, email: string): string => {
+    const emailPattern = new RegExp(escapeRegExp(email), "ig")
+    let cleaned = line.replace(emailPattern, " ")
+
+    cleaned = cleaned.replace(/\s+/g, " ").trim()
+    cleaned = cleaned.replace(/^\d+\s*/, "")
+    cleaned = cleaned.replace(/^(认证通过|认证未通过|已认证|通过)\s*/, "")
+    cleaned = cleaned.replace(/^[，,;；:：\-]+/, "").trim()
+    cleaned = cleaned.replace(/[，,;；:：]+$/, "").trim()
+
+    if (!cleaned) {
+      return email.split("@")[0]
+    }
+
+    return cleaned.length > 48 ? cleaned.slice(0, 48).trim() : cleaned
+  }
+
+  const parseRecipientsFromStructuredText = (content: string): Recipient[] => {
+    const lines = content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+
+    if (lines.length < 2) return []
+
+    const delimiter = detectDelimiter(lines[0])
+    const headers = parseDelimitedRow(lines[0], delimiter).map((cell) => cell.toLowerCase())
+    const hasHeader = headers.some((header) => header.includes("email") || header.includes("邮箱"))
+
+    if (!hasHeader) return []
+
+    const findHeaderIndex = (patterns: RegExp[]) => {
+      return headers.findIndex((header) => patterns.some((pattern) => pattern.test(header)))
+    }
+
+    const emailIndex = findHeaderIndex([/email/, /邮箱/])
+    const nameIndex = findHeaderIndex([/^name$/, /name/, /姓名/, /昵称/])
+    const companyIndex = findHeaderIndex([/company/, /公司/])
+    const positionIndex = findHeaderIndex([/position/, /title/, /职位/])
+
+    const recipientsFromTable: Recipient[] = []
+
+    for (const line of lines.slice(1)) {
+      const cells = parseDelimitedRow(line, delimiter)
+      if (!cells.some(Boolean)) continue
+
+      const emailSource = emailIndex >= 0 ? (cells[emailIndex] || "") : line
+      const emails = extractEmails(emailSource)
+
+      for (const email of emails) {
+        const nameSource = nameIndex >= 0 ? (cells[nameIndex] || "") : ""
+        const companySource = companyIndex >= 0 ? (cells[companyIndex] || "") : ""
+        const positionSource = positionIndex >= 0 ? (cells[positionIndex] || "") : ""
+
+        const recipient: Recipient = {
+          email,
+          name: nameSource.trim() || deriveNameFromLine(line, email),
+        }
+
+        if (companySource.trim()) {
+          recipient.company = companySource.trim()
+        }
+
+        if (positionSource.trim()) {
+          recipient.position = positionSource.trim()
+        }
+
+        recipientsFromTable.push(recipient)
+      }
+    }
+
+    return recipientsFromTable
+  }
+
+  const parseRecipientsFromAnyText = (content: string): Recipient[] => {
+    const merged: Recipient[] = []
+    const emailMap = new Map<string, Recipient>()
+
+    const pushRecipient = (recipient: Recipient) => {
+      const key = normalizeEmail(recipient.email)
+      if (!key) return
+
+      if (!emailMap.has(key)) {
+        const normalizedRecipient: Recipient = {
+          email: key,
+          name: recipient.name?.trim() || key.split("@")[0],
+          company: recipient.company?.trim() || undefined,
+          position: recipient.position?.trim() || undefined,
+        }
+        emailMap.set(key, normalizedRecipient)
+        merged.push(normalizedRecipient)
+      }
+    }
+
+    const structured = parseRecipientsFromStructuredText(content)
+    for (const item of structured) {
+      pushRecipient(item)
+    }
+
+    const lines = content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+
+    for (const line of lines) {
+      const emails = extractEmails(line)
+      for (const email of emails) {
+        pushRecipient({
+          email,
+          name: deriveNameFromLine(line, email),
+        })
+      }
+    }
+
+    return merged
+  }
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.target
+    const file = input.files?.[0]
 
     if (!file) return
 
-    const fileType = String(file.type || "").toLowerCase()
-    const fileName = String(file.name || "").toLowerCase()
-    const isCsv = fileName.endsWith(".csv") || fileType.includes("csv") || fileType === "application/vnd.ms-excel"
+    try {
+      const content = await file.text()
+      const parsedRecipients = parseRecipientsFromAnyText(content)
 
-    if (!isCsv) {
-      toast.error("Please select a CSV file")
-      return
+      if (parsedRecipients.length === 0) {
+        toast.error(
+          t.emailMultiSender.noEmailFound ||
+          (language === "zh" ? "未识别到邮箱地址，请检查文件内容" : "No email addresses were detected")
+        )
+        return
+      }
+
+      setRecipients(parsedRecipients)
+      toast.success(
+        formatWithCount(
+          t.emailMultiSender.parsedEmailCount || (language === "zh" ? "已解析 {count} 个邮箱" : "Parsed {count} emails"),
+          parsedRecipients.length
+        )
+      )
+    } catch (error) {
+      console.error("[email-multi-sender] parse upload failed:", error)
+      toast.error(
+        t.emailMultiSender.fileReadFailed ||
+        (language === "zh" ? "读取文件失败，请重试" : "Failed to read the uploaded file")
+      )
+    } finally {
+      input.value = ""
     }
-
-    // Mock CSV parsing
-    const mockRecipients: Recipient[] = [
-      { email: "john.doe@company.com", name: "John Doe", company: "Tech Corp", position: "Software Engineer" },
-      { email: "jane.smith@startup.com", name: "Jane Smith", company: "StartupXYZ", position: "Product Manager" },
-      {
-        email: "mike.johnson@enterprise.com",
-        name: "Mike Johnson",
-        company: "Enterprise Inc",
-        position: "Senior Developer",
-      },
-    ]
-    setRecipients(mockRecipients)
   }
 
   const handleSendEmails = async () => {
@@ -334,12 +533,12 @@ Best regards,
                     <div className="bg-primary/10 p-3 rounded-full mb-3">
                       <Upload className="w-6 h-6 text-primary" />
                     </div>
-                    <p className="text-sm font-medium mb-1">{t.emailMultiSender.importCsv}</p>
-                    <p className="text-xs text-muted-foreground mb-3">.csv file with headers: name, email, company, position</p>
+                    <p className="text-sm font-medium mb-1">{t.emailMultiSender.importCsvOrText || t.emailMultiSender.importCsv}</p>
+                    <p className="text-xs text-muted-foreground mb-3">{t.emailMultiSender.uploadFlexibleDescription || "支持 CSV/TXT 或任意文本，系统会自动提取邮箱"}</p>
                     <Input
                       id="csv-upload"
                       type="file"
-                      accept=".csv"
+                      accept=".csv,.txt,.tsv,.log,.md,.json,text/csv,text/plain"
                       onChange={handleFileUpload}
                       className="hidden"
                     />
