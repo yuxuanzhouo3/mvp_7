@@ -451,6 +451,49 @@ Best regards,
                 <CardDescription>{t.emailMultiSender.smtpSettingsDesc}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                 <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-3">
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                        {t.emailMultiSender.gmailGuideTitle || "Gmail 配置教程（推荐）"}
+                      </h4>
+                      <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
+                        {t.emailMultiSender.gmailGuideDesc || "按步骤获取应用专用密码并填写 SMTP，即可开始群发。"}
+                      </p>
+                    </div>
+
+                    <ol className="list-decimal pl-4 space-y-1 text-xs text-blue-800/90 dark:text-blue-300/90">
+                      <li>{t.emailMultiSender.gmailGuideStep1 || "先在 Google 账号开启两步验证。"}</li>
+                      <li>{t.emailMultiSender.gmailGuideStep2 || "进入应用专用密码页面，创建“邮件”应用密码。"}</li>
+                      <li>{t.emailMultiSender.gmailGuideStep3 || "复制 16 位应用专用密码（不是邮箱登录密码）。"}</li>
+                      <li>{t.emailMultiSender.gmailGuideStep4 || "点击 Gmail 预设自动填主机端口，再填写邮箱和应用专用密码。"}</li>
+                      <li>{t.emailMultiSender.gmailGuideStep5 || "先用 1-2 个地址测试，再正式批量发送。"}</li>
+                    </ol>
+
+                    <div className="rounded-md border border-blue-200/70 bg-white/80 p-3 dark:border-blue-900/60 dark:bg-slate-900/40">
+                      <p className="text-xs font-medium mb-2 text-blue-900 dark:text-blue-200">
+                        {t.emailMultiSender.gmailGuideDefaults || "Gmail 推荐配置"}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <p><span className="text-muted-foreground">{t.emailMultiSender.gmailGuideHostLabel || "SMTP 主机"}：</span><span className="font-mono">smtp.gmail.com</span></p>
+                        <p><span className="text-muted-foreground">{t.emailMultiSender.gmailGuidePortLabel || "端口"}：</span><span className="font-mono">465</span></p>
+                        <p><span className="text-muted-foreground">{t.emailMultiSender.gmailGuideUserLabel || "用户名"}：</span><span className="font-mono">your@gmail.com</span></p>
+                        <p><span className="text-muted-foreground">{t.emailMultiSender.gmailGuidePassLabel || "密码"}：</span><span className="font-mono">{t.emailMultiSender.gmailGuidePassValue || "16位应用专用密码"}</span></p>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-blue-800/90 dark:text-blue-300/90">
+                      {t.emailMultiSender.gmailGuideHint || "若认证失败，请确认两步验证已开启，且填写的是应用专用密码。"}{" "}
+                      <a
+                        href="https://myaccount.google.com/apppasswords"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-2 hover:opacity-80"
+                      >
+                        {t.emailMultiSender.gmailGuideLinkText || "打开 Google 应用专用密码页面"}
+                      </a>
+                    </p>
+                 </div>
+
                  {/* Quick Presets */}
                  <div className="bg-muted/30 p-4 rounded-lg space-y-3">
                     <Label className="text-xs uppercase text-muted-foreground font-semibold tracking-wider">{t.emailMultiSender.quickPresets}</Label>

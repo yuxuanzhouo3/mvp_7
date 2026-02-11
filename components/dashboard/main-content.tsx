@@ -83,12 +83,12 @@ export function MainContent({
 
   return (
     <main className="flex-1 min-w-0">
-      <div className="flex flex-col lg:flex-row gap-4 mb-6 items-end justify-between">
-        <div className="mb-2 lg:mb-0">
-          <h2 className="text-2xl font-bold text-balance mb-2">
+      <div className="flex flex-col lg:flex-row gap-4 mb-6 items-start lg:items-end justify-between">
+        <div className="mb-2 lg:mb-0 w-full lg:w-auto text-left">
+          <h2 className="text-xl sm:text-2xl font-bold text-balance mb-1 sm:mb-2">
             {selectedCategory === "all" ? t.common?.all : categories.find(c => c.id === selectedCategory) && getCategoryName(categories.find(c => c.id === selectedCategory))}
           </h2>
-          <p className="text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             {filteredTools.length} {t.common?.available || "available"}
           </p>
         </div>

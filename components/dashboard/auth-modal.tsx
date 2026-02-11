@@ -570,7 +570,9 @@ export function AuthModal({
                     <span className="w-full border-t border-border"></span>
                   </div>
                   <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-white dark:bg-gray-800 px-2 text-muted-foreground">Or continue with</span>
+                    <span className="bg-white dark:bg-gray-800 px-2 text-muted-foreground">
+                      {language === "zh" ? "或使用以下方式继续" : "Or continue with"}
+                    </span>
                   </div>
                 </div>
 
@@ -602,7 +604,7 @@ export function AuthModal({
                         {isSubmitting && (
                           <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
                         )}
-                        <span>Google</span>
+                        <span>{language === "zh" ? "Google 登录" : "Google"}</span>
                       </span>
                     </button>
                   ) : (
@@ -612,7 +614,7 @@ export function AuthModal({
                       onClick={async () => {
                         const result = await handleWeChatLogin()
                         if (!result.success) {
-                          setFormError(result.error || "WeChat login failed")
+                          setFormError(result.error || (language === "zh" ? "微信登录失败" : "WeChat login failed"))
                         }
                       }}
                       className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-border bg-[#07C160] text-white rounded-xl hover:bg-[#06ad56] transition-all"
@@ -620,7 +622,7 @@ export function AuthModal({
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18 0 .659-.52 1.188-1.162 1.188-.642 0-1.162-.529-1.162-1.188 0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18 0 .659-.52 1.188-1.162 1.188-.642 0-1.162-.529-1.162-1.188 0-.651.52-1.18 1.162-1.18z" />
                       </svg>
-                      <span>WeChat</span>
+                      <span>{language === "zh" ? "微信登录" : "WeChat"}</span>
                     </button>
                   )}
                 </div>
@@ -645,7 +647,7 @@ export function AuthModal({
                 }}
                 className="text-primary font-semibold hover:underline"
               >
-                Back to Login
+                {language === "zh" ? "返回登录" : "Back to Login"}
               </button>
             ) : (
               <>
@@ -658,7 +660,9 @@ export function AuthModal({
                   }}
                   className="text-primary font-semibold hover:underline"
                 >
-                  {isLogin ? t.auth?.signUp || "Create one" : t.auth?.signIn || "Sign In"}
+                  {isLogin
+                    ? (t.auth?.signUp || (language === "zh" ? "注册" : "Create one"))
+                    : (t.auth?.signIn || (language === "zh" ? "登录" : "Sign In"))}
                 </button>
               </>
             )}

@@ -706,6 +706,12 @@ export const zh = {
     download: {
         title: "下载客户端",
         subtitle: "下载 MultiGPT 客户端，享受更流畅的 AI 对话体验",
+        back: "返回",
+        loadingPackages: "正在加载安装包...",
+        noPackages: "暂无可用安装包",
+        viewMoreLogs: "查看更多日志",
+        latestRelease: "最新版本",
+        performanceFixes: "性能优化与问题修复",
         recommendedForYou: "推荐给您",
         allPlatforms: "所有平台",
         platform: {
@@ -833,7 +839,22 @@ export const zh = {
         configureSmtpFirstInline: "请先配置 SMTP 设置。",
         addRecipientsInline: "请先添加收件人。",
         selectTemplateInline: "请选择模板后继续。",
-        senderToolName: "邮件发送工具"
+        senderToolName: "邮件发送工具",
+        gmailGuideTitle: "Gmail 配置教程（推荐）",
+        gmailGuideDesc: "按下面步骤获取 Gmail 应用专用密码，然后填入 SMTP 配置即可发送。",
+        gmailGuideStep1: "打开 Google 账号，先开启“两步验证”（未开启将无法生成应用专用密码）。",
+        gmailGuideStep2: "进入“应用专用密码”，应用选择“邮件”，设备选择“其他（自定义名称）”。",
+        gmailGuideStep3: "复制生成的 16 位应用专用密码（不是 Gmail 登录密码）。",
+        gmailGuideStep4: "点击上方 Gmail 预设自动填入主机和端口，再把邮箱和应用专用密码填入。",
+        gmailGuideStep5: "先用 1-2 个收件人测试，确认成功后再批量发送。",
+        gmailGuideDefaults: "Gmail 推荐配置",
+        gmailGuideHostLabel: "SMTP 主机",
+        gmailGuidePortLabel: "端口",
+        gmailGuideUserLabel: "用户名",
+        gmailGuidePassLabel: "密码",
+        gmailGuidePassValue: "16位应用专用密码",
+        gmailGuideHint: "提示：若提示认证失败，请重新生成应用专用密码，并确认账号已开启两步验证。",
+        gmailGuideLinkText: "打开 Google 应用专用密码页面"
     },
 
     // ==================== file-format-converter ====================

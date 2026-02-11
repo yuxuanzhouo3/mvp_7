@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { useLanguage } from "@/components/language-provider";
 import { useTranslations } from "@/lib/i18n";
 import { getSupabaseClient } from "@/lib/supabase";
@@ -12,11 +12,21 @@ import { Sidebar } from "./dashboard/sidebar"
 import { MainContent } from "./dashboard/main-content"
 import { AuthModal } from "./dashboard/auth-modal"
 import { FeatureModal } from "./dashboard/feature-modal"
+import {
+  clearWxMpLoginParams,
+  exchangeCodeForToken,
+  isMiniProgram,
+  parseWxMpLoginCallback,
+  requestWxMpLogin,
+} from "@/lib/wechat-mp"
 
 export function Dashboard() {
   const { language } = useLanguage();
   const t = useTranslations(language);
   const { user, updateUser } = useUser();
+  const updateUserRef = useRef(updateUser)
+  const processedMpCallbackKeyRef = useRef<Set<string>>(new Set())
+  const mpLoginInFlightRef = useRef(false)
 
   // State management
   const [selectedCategory, setSelectedCategory] = useState("all")
@@ -32,12 +42,19 @@ export function Dashboard() {
   const [selectedToolName, setSelectedToolName] = useState("");
   const [showMobileSearch, setShowMobileSearch] = useState(false)
   const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null)
+  const [isInMiniProgram, setIsInMiniProgram] = useState(false)
+
+  useEffect(() => {
+    updateUserRef.current = updateUser
+  }, [updateUser])
 
   // Detect deployment region
   const deploymentRegion = (process.env.NEXT_PUBLIC_DEPLOYMENT_REGION || 'CN').toUpperCase()
   const isChinaRegion = deploymentRegion === 'CN'
 
   useEffect(() => {
+    setIsInMiniProgram(isMiniProgram())
+
     // Load recent tools
     const saved = localStorage.getItem("recentTools")
     if (saved) {
@@ -50,6 +67,136 @@ export function Dashboard() {
       setShowLoginModal(true)
       sessionStorage.removeItem('auth_error')
     }
+  }, [isChinaRegion])
+
+  useEffect(() => {
+    if (!isChinaRegion) return
+
+    const handleMpLoginCallback = async () => {
+      const callback = parseWxMpLoginCallback()
+      if (!callback) return
+
+      const callbackKey = callback.token && callback.openid
+        ? `token:${callback.openid}:${String(callback.token).slice(-16)}`
+        : callback.code
+          ? `code:${callback.code}`
+          : null
+
+      if (callbackKey) {
+        if (processedMpCallbackKeyRef.current.has(callbackKey)) {
+          clearWxMpLoginParams()
+          return
+        }
+
+        const storageKey = `wxmp_callback_processed:${callbackKey}`
+        const alreadyProcessed = sessionStorage.getItem(storageKey) === '1'
+        if (alreadyProcessed) {
+          clearWxMpLoginParams()
+          return
+        }
+
+        processedMpCallbackKeyRef.current.add(callbackKey)
+        sessionStorage.setItem(storageKey, '1')
+      }
+
+      try {
+        let finalToken = callback.token
+        let finalOpenid = callback.openid
+        let finalExpiresIn = callback.expiresIn
+        let finalUserName = callback.nickName
+        let finalUserAvatar = callback.avatarUrl
+
+        if ((!finalToken || !finalOpenid) && callback.code) {
+          const exchanged = await exchangeCodeForToken(
+            callback.code,
+            callback.nickName,
+            callback.avatarUrl
+          )
+
+          if (!exchanged.success || !exchanged.token || !exchanged.openid) {
+            clearWxMpLoginParams()
+            const errorText = String(exchanged.error || "")
+            const codeAlreadyUsed = /40163|code\s*been\s*used/i.test(errorText)
+            const hasLocalUser = Boolean(localStorage.getItem("user"))
+
+            if (codeAlreadyUsed && hasLocalUser) {
+              return
+            }
+
+            setShowLoginModal(true)
+            setAuthErrorMessage(
+              codeAlreadyUsed
+                ? "小程序登录码已失效，请重新点击微信登录"
+                : exchanged.error || "小程序登录失败"
+            )
+            return
+          }
+
+          finalToken = exchanged.token
+          finalOpenid = exchanged.openid
+          finalExpiresIn = exchanged.expiresIn ? String(exchanged.expiresIn) : finalExpiresIn
+          finalUserName = exchanged.userName || finalUserName
+          finalUserAvatar = exchanged.userAvatar || finalUserAvatar
+        }
+
+        if (!finalToken || !finalOpenid) {
+          clearWxMpLoginParams()
+          return
+        }
+
+        const mpCallbackResponse = await fetch('/api/auth/mp-callback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            token: finalToken,
+            openid: finalOpenid,
+            expiresIn: finalExpiresIn,
+            nickName: finalUserName,
+            avatarUrl: finalUserAvatar,
+          })
+        })
+
+        const mpCallbackData = await mpCallbackResponse.json().catch(() => null)
+
+        if (!mpCallbackResponse.ok || !mpCallbackData?.success) {
+          clearWxMpLoginParams()
+          setShowLoginModal(true)
+          setAuthErrorMessage(mpCallbackData?.message || mpCallbackData?.error || '小程序登录失败')
+          return
+        }
+
+        const callbackUser = mpCallbackData?.user
+        if (callbackUser && typeof callbackUser === 'object') {
+          localStorage.setItem("user", JSON.stringify(callbackUser))
+          localStorage.setItem("app-auth-state", JSON.stringify({
+            success: true,
+            user: callbackUser,
+            region: 'china',
+            database: 'cloudbase',
+          }))
+          updateUserRef.current(callbackUser)
+        }
+
+        clearWxMpLoginParams()
+
+        const currentUrl = new URL(window.location.href)
+        if (
+          currentUrl.searchParams.has('token') ||
+          currentUrl.searchParams.has('openid') ||
+          currentUrl.searchParams.has('mpCode')
+        ) {
+          window.location.reload()
+        }
+      } catch (error: any) {
+        console.error('[wechat-mp] callback error:', error)
+        clearWxMpLoginParams()
+        setShowLoginModal(true)
+        setAuthErrorMessage(error?.message || '小程序登录异常')
+      }
+    }
+
+    void handleMpLoginCallback()
   }, [isChinaRegion])
 
   const toggleFavorite = (toolId: string) => {
@@ -185,6 +332,32 @@ export function Dashboard() {
   }
 
   const handleWeChatLogin = async () => {
+    if (mpLoginInFlightRef.current) {
+      return { success: true }
+    }
+
+    mpLoginInFlightRef.current = true
+
+    const inMiniProgramNow = isMiniProgram()
+    if (isChinaRegion && inMiniProgramNow) {
+      setIsInMiniProgram(true)
+      try {
+        const started = await requestWxMpLogin(window.location.href)
+        if (started) {
+          return { success: true }
+        }
+
+        return {
+          success: false,
+          error: '当前处于小程序环境，但未检测到小程序 SDK，请稍后重试',
+        }
+      } finally {
+        setTimeout(() => {
+          mpLoginInFlightRef.current = false
+        }, 1500)
+      }
+    }
+
     try {
       const response = await fetch('/api/auth/wechat/callback', {
         method: 'POST',
@@ -202,6 +375,8 @@ export function Dashboard() {
     } catch (error: any) {
       console.error('微信登录错误:', error)
       return { success: false, error: error?.message || (t as any)?.notifications?.wechatLoginFailed || "WeChat login failed" }
+    } finally {
+      mpLoginInFlightRef.current = false
     }
   }
 

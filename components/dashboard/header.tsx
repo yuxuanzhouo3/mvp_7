@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTheme } from "next-themes"
 import { Input } from "@/components/ui/input"
@@ -20,8 +20,11 @@ import {
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu"
 import { getSupabaseClient } from "@/lib/supabase"
-import { Search, Zap, User, Menu, Sparkles, Settings2, Globe, Moon, Sun, Check, Coins, Download, Shield } from "lucide-react"
+import { Search, Zap, User, Menu, Sparkles, Settings2, Globe, Moon, Sun, Check, Coins, Download, Shield, CalendarDays } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Calendar } from "@/components/ui/calendar"
+import { toast } from "sonner"
 import { Sidebar } from "./sidebar"
 
 interface HeaderProps {
@@ -61,6 +64,13 @@ export function Header({
     : { account: 'Account', credits: t.common?.credits || 'Credits', logout: 'Logout' }
 
   const [isSheetOpen, setIsSheetOpen] = useState(false)
+  const [checkinOpen, setCheckinOpen] = useState(false)
+  const [checkinLoading, setCheckinLoading] = useState(false)
+  const [checkinSubmitting, setCheckinSubmitting] = useState(false)
+  const [checkinDates, setCheckinDates] = useState<string[]>([])
+  const [todayCheckedIn, setTodayCheckedIn] = useState(false)
+  const [dailyCredits, setDailyCredits] = useState(10)
+
 
   const isAdmin = (() => {
     const whitelist = String(process.env.NEXT_PUBLIC_ADMIN_EMAILS || "")
@@ -92,6 +102,79 @@ export function Header({
     const parts = label.includes("@") ? [label.split("@")[0]] : label.split(/\s+/).filter(Boolean)
     const initials = parts.slice(0, 2).map((p: string) => p[0]?.toUpperCase()).join("")
     return initials || "U"
+  }
+
+  const checkedDateObjects = useMemo(
+    () => checkinDates.map((value) => new Date(`${value}T00:00:00`)),
+    [checkinDates]
+  )
+
+  const loadCheckinStatus = async () => {
+    if (!user?.id && !user?.email) return
+
+    setCheckinLoading(true)
+    try {
+      const query = new URLSearchParams()
+      if (user?.id) query.set("userId", String(user.id))
+      if (user?.email) query.set("email", String(user.email))
+
+      const response = await fetch(`/api/user/checkin?${query.toString()}`)
+      const result = await response.json()
+
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || "Failed to load check-in status")
+      }
+
+      setCheckinDates(Array.isArray(result.checkinDates) ? result.checkinDates : [])
+      setTodayCheckedIn(Boolean(result.todayCheckedIn))
+      setDailyCredits(Number(result.dailyCredits || 10))
+    } catch (error: any) {
+      toast.error(error?.message || (language === "zh" ? "加载签到状态失败" : "Failed to load check-in status"))
+    } finally {
+      setCheckinLoading(false)
+    }
+  }
+
+  const handleDailyCheckin = async () => {
+    if (!user?.id && !user?.email) return
+
+    setCheckinSubmitting(true)
+    try {
+      const response = await fetch("/api/user/checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user?.id,
+          email: user?.email,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || "Check-in failed")
+      }
+
+      setCheckinDates(Array.isArray(result.checkinDates) ? result.checkinDates : [])
+      setTodayCheckedIn(Boolean(result.todayCheckedIn))
+      setDailyCredits(Number(result.dailyCredits || 10))
+
+      if (typeof result.credits === "number") {
+        const nextUser = { ...user, credits: result.credits }
+        localStorage.setItem("user", JSON.stringify(nextUser))
+        window.dispatchEvent(new Event("user-updated"))
+      }
+
+      if (result.alreadyCheckedIn) {
+        toast.info(language === "zh" ? "今天已经签到过了" : "Already checked in today")
+      } else {
+        toast.success(language === "zh" ? `签到成功，已获得 ${result.dailyCredits || 10} 积分` : `Check-in successful, +${result.dailyCredits || 10} credits`)
+      }
+    } catch (error: any) {
+      toast.error(error?.message || (language === "zh" ? "签到失败" : "Check-in failed"))
+    } finally {
+      setCheckinSubmitting(false)
+    }
   }
 
   const handleLogout = async () => {
@@ -280,6 +363,15 @@ export function Header({
                       <Coins className="mr-2 h-4 w-4" />
                       {ui.credits}: {user?.credits}
                     </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setCheckinOpen(true)
+                        void loadCheckinStatus()
+                      }}
+                    >
+                      <CalendarDays className="mr-2 h-4 w-4" />
+                      {language === 'zh' ? '每日签到' : 'Daily Check-in'}
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => router.push('/subscription')} className="text-primary font-medium focus:text-primary">
                       <Coins className="mr-2 h-4 w-4" />
                       {language === 'zh' ? '购买积分' : 'Buy Credits'}
@@ -304,6 +396,47 @@ export function Header({
             </div>
           </div>
         </div>
+
+        <Dialog open={checkinOpen} onOpenChange={setCheckinOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{language === 'zh' ? '每日签到' : 'Daily Check-in'}</DialogTitle>
+              <DialogDescription>
+                {language === 'zh' ? `每天可领取 ${dailyCredits} 积分` : `Claim ${dailyCredits} credits once per day`}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="rounded-md border p-2 flex justify-center">
+                <Calendar
+                  mode="single"
+                  selected={new Date()}
+                  modifiers={{ checked: checkedDateObjects }}
+                  modifiersClassNames={{ checked: 'bg-green-500 text-white rounded-md' }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>{language === 'zh' ? '已打卡天数' : 'Checked days'}</span>
+                <span className="font-medium text-foreground">{checkinDates.length}</span>
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={handleDailyCheckin}
+                disabled={checkinLoading || checkinSubmitting || todayCheckedIn}
+              >
+                {checkinLoading
+                  ? (language === 'zh' ? '加载中...' : 'Loading...')
+                  : checkinSubmitting
+                  ? (language === 'zh' ? '签到中...' : 'Checking in...')
+                  : todayCheckedIn
+                  ? (language === 'zh' ? '今日已签到' : 'Already checked in today')
+                  : (language === 'zh' ? `领取 ${dailyCredits} 积分` : `Claim ${dailyCredits} credits`)}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Mobile Search Bar (Expandable) */}
         <div id="search-mobile-container" className={`lg:hidden mt-3 overflow-hidden transition-all duration-300 ease-in-out ${showMobileSearch ? 'max-h-16 opacity-100 pb-2' : 'max-h-0 opacity-0 pointer-events-none'}`}>

@@ -9,14 +9,23 @@ import { LanguageProvider } from "@/components/language-provider"
 import { I18nProvider } from "@/lib/i18n/context"
 // import { UserProvider } from "@/components/user-context";
 import { Toaster } from "@/components/ui/sonner"
+import { MpDisableZoom } from "@/components/mp-disable-zoom"
 import "./globals.css"
 import { headers } from 'next/headers'
 
 export const metadata: Metadata = {
-  title: "AutoTools - Professional Automation Toolkit",
+  title: "morntool",
   description: "Streamline your workflow with powerful automation tools for professionals",
-  generator: "AutoTools MVP",
+  generator: "morntool",
 }
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  minimumScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+} as const
 
 export default function RootLayout({
                                      children,
@@ -53,7 +62,7 @@ export default function RootLayout({
         )}
       </head>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable} antialiased`}>
-      <LanguageProvider headers={geoHeaders}>
+      <LanguageProvider>
         <I18nProvider>
             <ThemeProvider
                 attribute="class"
@@ -62,6 +71,7 @@ export default function RootLayout({
                 disableTransitionOnChange
             >
               <div className="flex flex-col min-h-screen">
+                <MpDisableZoom />
                 <main className="flex-grow">
                   {children}
                 </main>

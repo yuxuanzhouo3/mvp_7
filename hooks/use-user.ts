@@ -68,6 +68,31 @@ export function useUser() {
     }
     setIsLoading(false)
 
+    const refreshFromStorage = () => {
+      const latest = localStorage.getItem("user")
+      if (!latest) return
+
+      try {
+        const parsed = JSON.parse(latest)
+        setUser(parsed)
+      } catch {
+        // ignore
+      }
+    }
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === "user") {
+        refreshFromStorage()
+      }
+    }
+
+    const onUserUpdated = () => {
+      refreshFromStorage()
+    }
+
+    window.addEventListener("storage", onStorage)
+    window.addEventListener("user-updated", onUserUpdated)
+
     // Listen for URL parameters (e.g., after OAuth redirect)
     const urlParams = new URLSearchParams(window.location.search)
     const userStr = urlParams.get('user')
@@ -81,6 +106,11 @@ export function useUser() {
         console.error("Failed to parse user from URL:", error)
       }
     }
+    return () => {
+      window.removeEventListener("storage", onStorage)
+      window.removeEventListener("user-updated", onUserUpdated)
+    }
+
   }, [])
 
   const updateUser = (newUser: User | null) => {
