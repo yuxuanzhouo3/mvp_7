@@ -8,6 +8,8 @@ export interface User {
   name?: string
   full_name?: string
   avatar_url?: string
+  avatar?: string
+  avatarUrl?: string
   credits: number
   subscription_tier: string
   subscription_expires_at?: string

@@ -53,7 +53,10 @@ export async function GET(request: NextRequest) {
         user: {
           id: user._id,
           email: user.email,
-          name: user.name,
+          name: user.name || user.full_name || user.nickname || "",
+          full_name: user.full_name || user.name || user.nickname || null,
+          avatar: user.avatar || user.avatar_url || null,
+          avatar_url: user.avatar_url || user.avatar || null,
           credits: Number.isFinite(user.credits) ? user.credits : 0,
           pro: Boolean(user.pro),
           subscription_tier: user.subscription_tier || (user.pro ? "pro" : "free"),

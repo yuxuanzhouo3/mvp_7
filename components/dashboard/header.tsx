@@ -87,13 +87,24 @@ export function Header({
   }
 
   const getAvatarUrl = (u: any): string | undefined => {
-    return (
-      u?.avatar_url ||
-      u?.avatarUrl ||
-      u?.picture ||
-      u?.user_metadata?.avatar_url ||
-      u?.user_metadata?.picture
-    )
+    const candidates = [
+      u?.avatar_url,
+      u?.avatar,
+      u?.avatarUrl,
+      u?.headimgurl,
+      u?.picture,
+      u?.user_metadata?.avatar_url,
+      u?.user_metadata?.picture,
+    ]
+
+    for (const raw of candidates) {
+      const value = typeof raw === "string" ? raw.trim() : ""
+      if (!value) continue
+      if (value.startsWith("wxfile://")) continue
+      return value
+    }
+
+    return undefined
   }
 
   const getAvatarFallback = (u: any): string => {
