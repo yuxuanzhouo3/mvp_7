@@ -64,14 +64,76 @@ export function EmailMultiSender() {
     user: "",
     pass: ""
   })
+  const [senderName, setSenderName] = useState("")
+  const [smtpGuideProvider, setSmtpGuideProvider] = useState<'gmail' | 'outlook' | 'qq' | '163'>('gmail')
   const [sendingRate, setSendingRate] = useState("normal") // slow, normal, fast
   const [sendStats, setSendStats] = useState({ success: 0, failed: 0 })
-  const [newRecipient, setNewRecipient] = useState({ name: '', email: '', company: '', position: '' })
+  const [newRecipientEmail, setNewRecipientEmail] = useState("")
+  const [rawRecipientsInput, setRawRecipientsInput] = useState("")
+
+  const mergeRecipientLists = (base: Recipient[], incoming: Recipient[]) => {
+    const recipientMap = new Map<string, Recipient>()
+
+    for (const item of base) {
+      const key = normalizeEmail(item.email)
+      if (!key) continue
+      recipientMap.set(key, {
+        ...item,
+        email: key,
+        name: item.name || key.split("@")[0],
+      })
+    }
+
+    for (const item of incoming) {
+      const key = normalizeEmail(item.email)
+      if (!key) continue
+
+      const previous = recipientMap.get(key)
+      recipientMap.set(key, {
+        ...previous,
+        ...item,
+        email: key,
+        name: item.name?.trim() || previous?.name || key.split("@")[0],
+      })
+    }
+
+    return Array.from(recipientMap.values())
+  }
 
   const handleAddRecipient = () => {
-    if (!newRecipient.email) return
-    setRecipients([...recipients, { ...newRecipient, email: newRecipient.email, name: newRecipient.name || newRecipient.email.split('@')[0] }])
-    setNewRecipient({ name: '', email: '', company: '', position: '' })
+    const normalized = normalizeEmail(newRecipientEmail)
+    if (!normalized) return
+
+    setRecipients((current) =>
+      mergeRecipientLists(current, [{ email: normalized, name: normalized.split("@")[0] }])
+    )
+    setNewRecipientEmail("")
+  }
+
+  const handleParseRawInput = () => {
+    const input = rawRecipientsInput.trim()
+    if (!input) {
+      toast.error(language === "zh" ? "请先粘贴文本内容" : "Please paste text content first")
+      return
+    }
+
+    const parsedRecipients = parseRecipientsFromAnyText(input)
+
+    if (parsedRecipients.length === 0) {
+      toast.error(
+        t.emailMultiSender.noEmailFound ||
+          (language === "zh" ? "未识别到邮箱地址，请检查输入内容" : "No email addresses were detected")
+      )
+      return
+    }
+
+    setRecipients((current) => mergeRecipientLists(current, parsedRecipients))
+    toast.success(
+      formatWithCount(
+        t.emailMultiSender.parsedEmailCount || (language === "zh" ? "已解析 {count} 个邮箱" : "Parsed {count} emails"),
+        parsedRecipients.length
+      )
+    )
   }
 
   const handleClearRecipients = () => {
@@ -221,13 +283,16 @@ Best regards,
     const emailPattern = new RegExp(escapeRegExp(email), "ig")
     let cleaned = line.replace(emailPattern, " ")
 
+    // 如果一行里有多个邮箱，去掉其他邮箱，避免被误当成姓名
+    cleaned = cleaned.replace(EMAIL_REGEX, " ")
+
     cleaned = cleaned.replace(/\s+/g, " ").trim()
     cleaned = cleaned.replace(/^\d+\s*/, "")
     cleaned = cleaned.replace(/^(认证通过|认证未通过|已认证|通过)\s*/, "")
     cleaned = cleaned.replace(/^[，,;；:：\-]+/, "").trim()
     cleaned = cleaned.replace(/[，,;；:：]+$/, "").trim()
 
-    if (!cleaned) {
+    if (!cleaned || cleaned.includes("@")) {
       return email.split("@")[0]
     }
 
@@ -352,7 +417,7 @@ Best regards,
         return
       }
 
-      setRecipients(parsedRecipients)
+      setRecipients((current) => mergeRecipientLists(current, parsedRecipients))
       toast.success(
         formatWithCount(
           t.emailMultiSender.parsedEmailCount || (language === "zh" ? "已解析 {count} 个邮箱" : "Parsed {count} emails"),
@@ -426,14 +491,14 @@ Best regards,
            headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify({
              smtpConfig,
-             mailOptions: {
-               to: recipient.email,
-               subject: subject,
-               html: content.replace(/\n/g, '<br/>'), // Simple plain text to HTML
-               fromName: t.emailMultiSender.senderName || t.emailMultiSender.senderToolName || "Email Sender Tool"
-             }
+               mailOptions: {
+                 to: recipient.email,
+                 subject: subject,
+                 html: content.replace(/\n/g, '<br/>'), // Simple plain text to HTML
+                 fromName: senderName.trim() || undefined
+               }
+             })
            })
-         })
 
          const result = await response.json()
 
@@ -443,12 +508,26 @@ Best regards,
            successCount++
          } else {
            newRecipients[i].status = 'failed'
-           newRecipients[i].error = result.error
+           const friendlyError =
+             result?.userMessage ||
+             (typeof result?.error === 'string' &&
+             (result.error.includes('ETIMEDOUT') ||
+               result.error.includes('ESOCKET') ||
+               result.error.includes('CONN'))
+               ? (language === 'zh'
+                   ? 'SMTP 网络不可达或端口被拦截，请检查服务器防火墙和当前端口出站策略。'
+                   : 'SMTP network is unreachable or blocked. Please check firewall and outbound policy for the current port.')
+               : result.error)
+
+           newRecipients[i].error = friendlyError
            failedCount++
          }
        } catch (error: any) {
           newRecipients[i].status = 'failed'
-          newRecipients[i].error = error.message
+          newRecipients[i].error =
+            language === 'zh'
+              ? `发送失败：${error.message}`
+              : `Send failed: ${error.message}`
           failedCount++
        }
 
@@ -487,8 +566,8 @@ Best regards,
   }
 
   const downloadSampleCsv = () => {
-    const headers = "name,email,company,position"
-    const sampleData = "John Doe,john@example.com,Tech Corp,Developer"
+    const headers = "email"
+    const sampleData = "john@example.com"
     const csvContent = "data:text/csv;charset=utf-8," + headers + "\n" + sampleData
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement("a")
@@ -556,33 +635,43 @@ Best regards,
                     </Button>
                   </label>
 
-                  {/* Manual Add Form */}
+                  {/* Manual Add / Text Parse */}
                   <div className="space-y-3 p-4 border rounded-lg bg-card">
                     <h3 className="text-sm font-medium flex items-center gap-2">
                       <Plus className="w-4 h-4" /> {t.emailMultiSender.addManually}
                     </h3>
                     <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">
+                        {language === "zh" ? "粘贴任意文本智能解析邮箱" : "Paste any text to auto-parse emails"}
+                      </Label>
+                      <Textarea
+                        placeholder={
+                          language === "zh"
+                            ? "可直接粘贴聊天记录、表格、签名等，系统会自动提取邮箱"
+                            : "Paste chat logs, tables, signatures, etc. Emails will be extracted automatically"
+                        }
+                        value={rawRecipientsInput}
+                        onChange={(e) => setRawRecipientsInput(e.target.value)}
+                        className="min-h-[100px]"
+                      />
+                      <Button onClick={handleParseRawInput} variant="secondary" size="sm" className="w-full">
+                        {language === "zh" ? "解析文本并添加" : "Parse text and add"}
+                      </Button>
+                    </div>
+
+                    <div className="border-t pt-3 space-y-2">
+                      <Label className="text-xs text-muted-foreground">
+                        {language === "zh" ? "手动单个添加" : "Add single recipient"}
+                      </Label>
+                    </div>
+                    <div className="space-y-2">
                       <Input 
                         placeholder={t.emailMultiSender.placeholderEmail}
-                        value={newRecipient.email}
-                        onChange={(e) => setNewRecipient({...newRecipient, email: e.target.value})}
+                        value={newRecipientEmail}
+                        onChange={(e) => setNewRecipientEmail(e.target.value)}
                         className="h-8"
                       />
-                      <div className="grid grid-cols-2 gap-2">
-                        <Input 
-                          placeholder={t.emailMultiSender.placeholderName}
-                          value={newRecipient.name}
-                          onChange={(e) => setNewRecipient({...newRecipient, name: e.target.value})}
-                          className="h-8"
-                        />
-                        <Input 
-                          placeholder={t.emailMultiSender.placeholderCompany}
-                          value={newRecipient.company}
-                          onChange={(e) => setNewRecipient({...newRecipient, company: e.target.value})}
-                          className="h-8"
-                        />
-                      </div>
-                      <Button onClick={handleAddRecipient} disabled={!newRecipient.email} size="sm" className="w-full">
+                      <Button onClick={handleAddRecipient} disabled={!newRecipientEmail.trim()} size="sm" className="w-full">
                         {t.emailMultiSender.addRecipient}
                       </Button>
                     </div>
@@ -650,6 +739,25 @@ Best regards,
                 <CardDescription>{t.emailMultiSender.smtpSettingsDesc}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                 <div className="space-y-3">
+                   <div className="flex items-center justify-between gap-3">
+                     <Label className="text-xs uppercase text-muted-foreground font-semibold tracking-wider">
+                       {language === 'zh' ? 'SMTP 配置教程' : 'SMTP Setup Guide'}
+                     </Label>
+                     <Select value={smtpGuideProvider} onValueChange={(value) => setSmtpGuideProvider(value as 'gmail' | 'outlook' | 'qq' | '163')}>
+                       <SelectTrigger className="w-[180px] h-8">
+                         <SelectValue placeholder="Select provider" />
+                       </SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="gmail">Gmail</SelectItem>
+                         <SelectItem value="outlook">Outlook / M365</SelectItem>
+                         <SelectItem value="qq">QQ Mail</SelectItem>
+                         <SelectItem value="163">163 Mail</SelectItem>
+                       </SelectContent>
+                     </Select>
+                   </div>
+
+                 {smtpGuideProvider === 'gmail' ? (
                  <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-3">
                     <div className="space-y-1">
                       <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
@@ -692,6 +800,104 @@ Best regards,
                       </a>
                     </p>
                  </div>
+                 ) : smtpGuideProvider === 'outlook' ? (
+                 <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-3">
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                        {language === 'zh' ? 'Outlook 配置教程（推荐 Microsoft 365）' : 'Outlook Setup Guide (Microsoft 365 Recommended)'}
+                      </h4>
+                      <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
+                        {language === 'zh' ? '使用 Outlook/Hotmail/企业 Microsoft 365 邮箱时，建议先配置 SMTP AUTH。' : 'For Outlook/Hotmail/Microsoft 365 mailboxes, enable SMTP AUTH first.'}
+                      </p>
+                    </div>
+
+                    <ol className="list-decimal pl-4 space-y-1 text-xs text-blue-800/90 dark:text-blue-300/90">
+                      <li>{language === 'zh' ? '确认账号允许 SMTP AUTH（组织管理员可在 M365 后台开启）。' : 'Ensure SMTP AUTH is enabled (M365 admin may need to allow it).'}</li>
+                      <li>{language === 'zh' ? '若账号开启了 MFA，请创建并使用应用专用密码。' : 'If MFA is enabled, create and use an app password.'}</li>
+                      <li>{language === 'zh' ? '点击 Outlook 预设自动填主机和端口。' : 'Click the Outlook preset to autofill host and port.'}</li>
+                      <li>{language === 'zh' ? '用户名填写完整邮箱地址。' : 'Use full email address as username.'}</li>
+                    </ol>
+
+                    <div className="rounded-md border border-blue-200/70 bg-white/80 p-3 dark:border-blue-900/60 dark:bg-slate-900/40">
+                      <p className="text-xs font-medium mb-2 text-blue-900 dark:text-blue-200">
+                        {language === 'zh' ? 'Outlook 推荐配置' : 'Outlook Recommended Settings'}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <p><span className="text-muted-foreground">{language === 'zh' ? 'SMTP 主机' : 'SMTP Host'}：</span><span className="font-mono">smtp.office365.com</span></p>
+                        <p><span className="text-muted-foreground">{language === 'zh' ? '端口' : 'Port'}：</span><span className="font-mono">587</span></p>
+                        <p><span className="text-muted-foreground">{language === 'zh' ? '用户名' : 'Username'}：</span><span className="font-mono">your@outlook.com</span></p>
+                        <p><span className="text-muted-foreground">{language === 'zh' ? '密码' : 'Password'}：</span><span className="font-mono">{language === 'zh' ? '邮箱密码或应用专用密码' : 'Mailbox password or app password'}</span></p>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-blue-800/90 dark:text-blue-300/90">
+                      {language === 'zh'
+                        ? '如果出现超时或认证失败，请检查服务器出站 587 端口、防火墙策略，以及租户是否禁用 SMTP AUTH。'
+                        : 'If timeout/auth errors occur, check outbound 587 access, firewall policy, and SMTP AUTH policy in your tenant.'}
+                    </p>
+                 </div>
+                 ) : smtpGuideProvider === 'qq' ? (
+                 <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-3">
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                        {language === 'zh' ? 'QQ 邮箱配置教程（国内推荐）' : 'QQ Mail Setup Guide (CN Recommended)'}
+                      </h4>
+                      <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
+                        {language === 'zh' ? 'QQ 邮箱在国内网络可达性更稳定，建议优先用于国内部署。' : 'QQ Mail is usually more reachable in mainland China deployments.'}
+                      </p>
+                    </div>
+
+                    <ol className="list-decimal pl-4 space-y-1 text-xs text-blue-800/90 dark:text-blue-300/90">
+                      <li>{language === 'zh' ? '登录 QQ 邮箱设置，开启 SMTP 服务。' : 'Enable SMTP service in QQ Mail settings.'}</li>
+                      <li>{language === 'zh' ? '获取“授权码”（不是 QQ 登录密码）。' : 'Generate an authorization code (not your account password).'}</li>
+                      <li>{language === 'zh' ? '用户名填写完整 QQ 邮箱地址。' : 'Use full QQ mailbox address as username.'}</li>
+                      <li>{language === 'zh' ? '密码填写 SMTP 授权码。' : 'Use SMTP authorization code as password.'}</li>
+                    </ol>
+
+                    <div className="rounded-md border border-blue-200/70 bg-white/80 p-3 dark:border-blue-900/60 dark:bg-slate-900/40">
+                      <p className="text-xs font-medium mb-2 text-blue-900 dark:text-blue-200">
+                        {language === 'zh' ? 'QQ 邮箱推荐配置' : 'QQ Mail Recommended Settings'}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <p><span className="text-muted-foreground">{language === 'zh' ? 'SMTP 主机' : 'SMTP Host'}：</span><span className="font-mono">smtp.qq.com</span></p>
+                        <p><span className="text-muted-foreground">{language === 'zh' ? '端口' : 'Port'}：</span><span className="font-mono">465</span></p>
+                        <p><span className="text-muted-foreground">{language === 'zh' ? '用户名' : 'Username'}：</span><span className="font-mono">your@qq.com</span></p>
+                        <p><span className="text-muted-foreground">{language === 'zh' ? '密码' : 'Password'}：</span><span className="font-mono">{language === 'zh' ? 'SMTP 授权码' : 'SMTP authorization code'}</span></p>
+                      </div>
+                    </div>
+                 </div>
+                 ) : (
+                 <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-3">
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                        {language === 'zh' ? '163 邮箱配置教程（国内推荐）' : '163 Mail Setup Guide (CN Recommended)'}
+                      </h4>
+                      <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
+                        {language === 'zh' ? '163 邮箱同样适合国内网络环境。' : '163 Mail is also suitable for mainland China network conditions.'}
+                      </p>
+                    </div>
+
+                    <ol className="list-decimal pl-4 space-y-1 text-xs text-blue-800/90 dark:text-blue-300/90">
+                      <li>{language === 'zh' ? '进入 163 邮箱设置，开启 SMTP 服务。' : 'Enable SMTP service in 163 Mail settings.'}</li>
+                      <li>{language === 'zh' ? '生成客户端授权码。' : 'Generate client authorization code.'}</li>
+                      <li>{language === 'zh' ? '用户名填写完整 163 邮箱地址。' : 'Use full 163 mailbox address as username.'}</li>
+                      <li>{language === 'zh' ? '密码填写客户端授权码。' : 'Use client authorization code as password.'}</li>
+                    </ol>
+
+                    <div className="rounded-md border border-blue-200/70 bg-white/80 p-3 dark:border-blue-900/60 dark:bg-slate-900/40">
+                      <p className="text-xs font-medium mb-2 text-blue-900 dark:text-blue-200">
+                        {language === 'zh' ? '163 邮箱推荐配置' : '163 Mail Recommended Settings'}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <p><span className="text-muted-foreground">{language === 'zh' ? 'SMTP 主机' : 'SMTP Host'}：</span><span className="font-mono">smtp.163.com</span></p>
+                        <p><span className="text-muted-foreground">{language === 'zh' ? '端口' : 'Port'}：</span><span className="font-mono">465</span></p>
+                        <p><span className="text-muted-foreground">{language === 'zh' ? '用户名' : 'Username'}：</span><span className="font-mono">your@163.com</span></p>
+                        <p><span className="text-muted-foreground">{language === 'zh' ? '密码' : 'Password'}：</span><span className="font-mono">{language === 'zh' ? 'SMTP 授权码' : 'SMTP authorization code'}</span></p>
+                      </div>
+                    </div>
+                 </div>
+                 )}
+                 </div>
 
                  {/* Quick Presets */}
                  <div className="bg-muted/30 p-4 rounded-lg space-y-3">
@@ -725,6 +931,14 @@ Best regards,
                     </div>
                     <div className="space-y-4">
                         <div className="space-y-2">
+                          <Label>{language === 'zh' ? '发件人名称（可选）' : 'Sender Name (optional)'}</Label>
+                          <Input
+                            placeholder={language === 'zh' ? '例如：张三 / 品牌名' : 'e.g. Your Name / Brand'}
+                            value={senderName}
+                            onChange={(e) => setSenderName(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
                           <Label>{t.emailMultiSender.smtpUser}</Label>
                           <Input 
                             placeholder="your-email@example.com" 
@@ -749,6 +963,14 @@ Best regards,
                  <div className="text-[12px] text-muted-foreground bg-blue-50 dark:bg-blue-900/20 p-3 rounded text-blue-700 dark:text-blue-300 flex gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <span>{t.emailMultiSender.smtpHint}</span>
+                 </div>
+                 <div className="text-[12px] bg-amber-50 dark:bg-amber-900/20 p-3 rounded text-amber-700 dark:text-amber-300 flex gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>
+                      {language === 'zh'
+                        ? '提示：国内网络环境下，Gmail/Outlook 等海外邮箱 SMTP 可能不可达或不稳定。建议优先使用 QQ 邮箱、163 邮箱或企业邮箱。'
+                        : 'Tip: In mainland China network environments, overseas SMTP providers like Gmail/Outlook may be unreachable or unstable. Prefer QQ Mail, 163 Mail, or local enterprise mail.'}
+                    </span>
                  </div>
               </CardContent>
             </Card>

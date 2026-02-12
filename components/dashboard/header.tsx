@@ -421,9 +421,11 @@ export function Header({
               <div className="rounded-md border p-2 flex justify-center">
                 <Calendar
                   mode="single"
-                  selected={new Date()}
                   modifiers={{ checked: checkedDateObjects }}
-                  modifiersClassNames={{ checked: 'bg-green-500 text-white rounded-md' }}
+                  modifiersClassNames={{
+                    checked:
+                      'text-white [&>button]:bg-green-500 [&>button]:text-white [&>button]:rounded-full',
+                  }}
                 />
               </div>
 
