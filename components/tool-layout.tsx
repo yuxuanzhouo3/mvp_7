@@ -3,8 +3,6 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft, Home, Zap } from "lucide-react"
 import Link from "next/link"
 import { ThemeSwitch } from "@/components/theme-switch"
-import { useLanguage } from "@/components/language-provider";
-import { useTranslations } from '@/lib/i18n'
 import { getTranslations } from '@/lib/i18n'
 import { AdBanner } from "@/components/dashboard/ad-banner"
 
@@ -12,24 +10,13 @@ interface ToolLayoutProps {
   title: string
   description: string
   category: string
+  language: "zh" | "en"
   creditCost?: number | null
   children: React.ReactNode
 }
 
-export function ToolLayout({ title, description, category, creditCost, children }: ToolLayoutProps) {
-  let language = 'en'; // 默认语言
-  let t = getTranslations(language as 'zh' | 'en');
-
-  // 尝试从上下文获取语言
-  try {
-    const langContext = useLanguage();
-    console.log('Language context:', langContext);
-    language = langContext.language;
-    t = useTranslations(language);
-  } catch (e) {
-    // 如果上下文不可用，使用默认值
-    console.warn('Language context not available, using default translations');
-  }
+export function ToolLayout({ title, description, category, language, creditCost, children }: ToolLayoutProps) {
+  const t = getTranslations(language)
 
   const getCategoryColor = (cat: string) => {
     switch (cat) {

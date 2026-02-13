@@ -14,6 +14,11 @@ import { EmailMultiSender } from "@/components/tools/email-multi-sender"
 import { TextMultiSender } from "@/components/tools/text-multi-sender"
 import { SocialAutoPoster } from "@/components/tools/social-auto-poster"
 import { DataScraperPro } from "@/components/tools/data-scraper-pro"
+import { FileCompressor } from "@/components/tools/file-compressor"
+import { FileDecompressor } from "@/components/tools/file-decompressor"
+import { FileEncryptor } from "@/components/tools/file-encryptor"
+import { FileDecryptor } from "@/components/tools/file-decryptor"
+import { CloudDrive } from "@/components/tools/cloud-drive"
 import { getTranslations } from "@/lib/i18n";
 import { cookies } from "next/headers";
 import { getToolCreditCost } from "@/lib/credits/pricing"
@@ -32,6 +37,11 @@ const toolComponents = {
   "text-multi-sender": TextMultiSender,
   "social-auto-poster": SocialAutoPoster,
   "data-scraper": DataScraperPro,
+  "file-compressor": FileCompressor,
+  "file-decompressor": FileDecompressor,
+  "file-encryptor": FileEncryptor,
+  "file-decryptor": FileDecryptor,
+  "cloud-drive": CloudDrive,
 }
 
 interface ToolPageProps {
@@ -110,6 +120,31 @@ const getToolMetadata = (language: 'zh' | 'en') => {
       description: t.tools?.dataScraper?.description || "Extract emails, phone numbers, and custom data from websites",
       category: "data-extraction",
     },
+    "file-compressor": {
+      title: t.tools?.fileCompressor?.name || "File Compressor",
+      description: t.tools?.fileCompressor?.description || "Compress files locally with modern browser compression APIs",
+      category: "file-converters",
+    },
+    "file-decompressor": {
+      title: t.tools?.fileDecompressor?.name || "File Decompressor",
+      description: t.tools?.fileDecompressor?.description || "Decompress Gzip/Deflate files locally in browser",
+      category: "file-converters",
+    },
+    "file-encryptor": {
+      title: t.tools?.fileEncryptor?.name || "File Encryptor",
+      description: t.tools?.fileEncryptor?.description || "Encrypt files locally with AES-256-GCM",
+      category: "productivity",
+    },
+    "file-decryptor": {
+      title: t.tools?.fileDecryptor?.name || "File Decryptor",
+      description: t.tools?.fileDecryptor?.description || "Decrypt local encrypted files with password",
+      category: "productivity",
+    },
+    "cloud-drive": {
+      title: t.tools?.cloudDrive?.name || "Cloud Drive",
+      description: t.tools?.cloudDrive?.description || "Upload and manage files with shareable links",
+      category: "productivity",
+    },
   };
 }
 
@@ -130,7 +165,13 @@ export default function ToolPage({ params }: ToolPageProps) {
   }
 
   return (
-      <ToolLayout title={metadata.title} description={metadata.description} category={metadata.category} creditCost={creditCost}>
+      <ToolLayout
+        title={metadata.title}
+        description={metadata.description}
+        category={metadata.category}
+        language={language}
+        creditCost={creditCost}
+      >
         <ToolAccessGuard><ToolComponent /></ToolAccessGuard>
       </ToolLayout>
   )

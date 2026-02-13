@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
+import { useLanguage } from "@/components/language-provider"
 import {
   Calendar,
   Clock,
@@ -44,6 +45,10 @@ interface Platform {
 }
 
 export function SocialAutoPoster() {
+  const { language } = useLanguage()
+  const zh = language === "zh"
+  const tx = (zhText: string, enText: string) => (zh ? zhText : enText)
+
   const [posts, setPosts] = useState<SocialPost[]>([])
   const [currentPost, setCurrentPost] = useState<SocialPost>({
     id: "",
@@ -108,6 +113,12 @@ export function SocialAutoPoster() {
     setPosts((prev) => prev.filter((p) => p.id !== postId))
   }
 
+  const statusLabel = (status: SocialPost["status"]) => {
+    if (status === "draft") return tx("草稿", "draft")
+    if (status === "scheduled") return tx("已排期", "scheduled")
+    return tx("已发布", "posted")
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -115,12 +126,12 @@ export function SocialAutoPoster() {
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <Share2 className="w-5 h-5 text-[color:var(--social-media)]" />
-              <CardTitle className="text-lg">Platforms</CardTitle>
+              <CardTitle className="text-lg">{tx("平台数", "Platforms")}</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{connectedPlatforms.length}</div>
-            <p className="text-sm text-muted-foreground">Connected</p>
+            <p className="text-sm text-muted-foreground">{tx("已连接", "Connected")}</p>
           </CardContent>
         </Card>
 
@@ -128,12 +139,12 @@ export function SocialAutoPoster() {
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <Calendar className="w-5 h-5 text-blue-500" />
-              <CardTitle className="text-lg">Scheduled</CardTitle>
+              <CardTitle className="text-lg">{tx("已排期", "Scheduled")}</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{posts.filter((p) => p.status === "scheduled").length}</div>
-            <p className="text-sm text-muted-foreground">Posts queued</p>
+            <p className="text-sm text-muted-foreground">{tx("排队发布", "Posts queued")}</p>
           </CardContent>
         </Card>
 
@@ -141,12 +152,12 @@ export function SocialAutoPoster() {
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-green-500" />
-              <CardTitle className="text-lg">Posted</CardTitle>
+              <CardTitle className="text-lg">{tx("已发布", "Posted")}</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{posts.filter((p) => p.status === "posted").length}</div>
-            <p className="text-sm text-muted-foreground">Successfully sent</p>
+            <p className="text-sm text-muted-foreground">{tx("发布成功", "Successfully sent")}</p>
           </CardContent>
         </Card>
 
@@ -154,22 +165,22 @@ export function SocialAutoPoster() {
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-purple-500" />
-              <CardTitle className="text-lg">Engagement</CardTitle>
+              <CardTitle className="text-lg">{tx("互动量", "Engagement")}</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">2.4K</div>
-            <p className="text-sm text-muted-foreground">Total interactions</p>
+            <p className="text-sm text-muted-foreground">{tx("总互动", "Total interactions")}</p>
           </CardContent>
         </Card>
       </div>
 
       <Tabs defaultValue="compose" className="space-y-6">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="compose">Compose</TabsTrigger>
-          <TabsTrigger value="platforms">Platforms</TabsTrigger>
-          <TabsTrigger value="schedule">Schedule</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="compose">{tx("编辑", "Compose")}</TabsTrigger>
+          <TabsTrigger value="platforms">{tx("平台", "Platforms")}</TabsTrigger>
+          <TabsTrigger value="schedule">{tx("排期", "Schedule")}</TabsTrigger>
+          <TabsTrigger value="analytics">{tx("分析", "Analytics")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="compose" className="space-y-4">
@@ -177,28 +188,28 @@ export function SocialAutoPoster() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Share2 className="w-5 h-5" />
-                Create Post
+                {tx("创建帖子", "Create Post")}
               </CardTitle>
-              <CardDescription>Compose your social media post</CardDescription>
+              <CardDescription>{tx("编辑你的社媒内容", "Compose your social media post")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="post-content">Post Content</Label>
+                <Label htmlFor="post-content">{tx("帖子内容", "Post Content")}</Label>
                 <Textarea
                   id="post-content"
                   value={currentPost.content}
                   onChange={(e) => setCurrentPost((prev) => ({ ...prev, content: e.target.value }))}
-                  placeholder="What's on your mind?"
+                  placeholder={tx("想发布什么内容？", "What's on your mind?")}
                   rows={6}
                 />
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Character count: {currentPost.content.length}</span>
-                  <span>Twitter limit: 280 characters</span>
+                  <span>{tx("字数", "Character count")}: {currentPost.content.length}</span>
+                  <span>{tx("Twitter 限制：280 字", "Twitter limit: 280 characters")}</span>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Select Platforms</Label>
+                <Label>{tx("选择平台", "Select Platforms")}</Label>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {connectedPlatforms.map((platform) => {
                     const Icon = platform.icon
@@ -221,10 +232,10 @@ export function SocialAutoPoster() {
               </div>
 
               <div className="space-y-2">
-                <Label>Media (Optional)</Label>
+                <Label>{tx("媒体文件（可选）", "Media (Optional)")}</Label>
                 <div className="border-2 border-dashed border-border rounded-lg p-4 text-center">
                   <ImageIcon className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">Drag & drop images or click to browse</p>
+                  <p className="text-sm text-muted-foreground">{tx("拖拽图片或点击选择", "Drag & drop images or click to browse")}</p>
                   <Input type="file" accept="image/*" multiple className="mt-2 max-w-xs mx-auto" />
                 </div>
               </div>
@@ -232,14 +243,14 @@ export function SocialAutoPoster() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Switch checked={isScheduled} onCheckedChange={setIsScheduled} />
-                  <Label>Schedule for later</Label>
+                  <Label>{tx("稍后发布", "Schedule for later")}</Label>
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={handleSavePost} disabled={!currentPost.content}>
-                    Save Draft
+                    {tx("保存草稿", "Save Draft")}
                   </Button>
                   <Button onClick={handlePostNow} disabled={!currentPost.content || currentPost.platforms.length === 0}>
-                    {isPosting ? "Posting..." : "Post Now"}
+                    {isPosting ? tx("发布中...", "Posting...") : tx("立即发布", "Post Now")}
                   </Button>
                 </div>
               </div>
@@ -247,7 +258,7 @@ export function SocialAutoPoster() {
               {isScheduled && (
                 <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
                   <div className="space-y-2">
-                    <Label htmlFor="schedule-date">Date</Label>
+                    <Label htmlFor="schedule-date">{tx("日期", "Date")}</Label>
                     <Input
                       id="schedule-date"
                       type="date"
@@ -256,7 +267,7 @@ export function SocialAutoPoster() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="schedule-time">Time</Label>
+                    <Label htmlFor="schedule-time">{tx("时间", "Time")}</Label>
                     <Input
                       id="schedule-time"
                       type="time"
@@ -270,7 +281,7 @@ export function SocialAutoPoster() {
               {isPosting && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label>Posting Progress</Label>
+                    <Label>{tx("发布进度", "Posting Progress")}</Label>
                     <span className="text-sm text-muted-foreground">{postProgress}%</span>
                   </div>
                   <Progress value={postProgress} className="w-full" />
@@ -282,8 +293,8 @@ export function SocialAutoPoster() {
           {posts.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Recent Posts</CardTitle>
-                <CardDescription>Your latest social media posts</CardDescription>
+                <CardTitle>{tx("最近帖子", "Recent Posts")}</CardTitle>
+                <CardDescription>{tx("你最近发布的社媒内容", "Your latest social media posts")}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4 max-h-64 overflow-y-auto">
@@ -299,7 +310,7 @@ export function SocialAutoPoster() {
                             return <Icon key={platformId} className={`w-4 h-4 ${platform.color}`} />
                           })}
                           <Badge variant={post.status === "posted" ? "default" : "secondary"} className="text-xs">
-                            {post.status}
+                            {statusLabel(post.status)}
                           </Badge>
                           {post.scheduledTime && (
                             <span className="text-xs text-muted-foreground">{post.scheduledTime}</span>
@@ -320,8 +331,8 @@ export function SocialAutoPoster() {
         <TabsContent value="platforms" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Platform Connections</CardTitle>
-              <CardDescription>Manage your social media platform connections</CardDescription>
+              <CardTitle>{tx("平台连接", "Platform Connections")}</CardTitle>
+              <CardDescription>{tx("管理你的社媒平台连接", "Manage your social media platform connections")}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -336,17 +347,17 @@ export function SocialAutoPoster() {
                             <Icon className={`w-8 h-8 ${platform.color}`} />
                             <div>
                               <CardTitle className="text-base">{platform.name}</CardTitle>
-                              <CardDescription>{platform.connected ? "Connected" : "Not connected"}</CardDescription>
+                              <CardDescription>{platform.connected ? tx("已连接", "Connected") : tx("未连接", "Not connected")}</CardDescription>
                             </div>
                           </div>
                           <Badge variant={platform.connected ? "default" : "secondary"}>
-                            {platform.connected ? "Active" : "Inactive"}
+                            {platform.connected ? tx("可用", "Active") : tx("不可用", "Inactive")}
                           </Badge>
                         </div>
                       </CardHeader>
                       <CardContent>
                         <Button variant={platform.connected ? "outline" : "default"} size="sm" className="w-full">
-                          {platform.connected ? "Disconnect" : "Connect"}
+                          {platform.connected ? tx("断开连接", "Disconnect") : tx("连接", "Connect")}
                         </Button>
                       </CardContent>
                     </Card>
@@ -362,16 +373,16 @@ export function SocialAutoPoster() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="w-5 h-5" />
-                Scheduled Posts
+                {tx("排期帖子", "Scheduled Posts")}
               </CardTitle>
-              <CardDescription>Manage your scheduled social media posts</CardDescription>
+              <CardDescription>{tx("管理已排期的帖子", "Manage your scheduled social media posts")}</CardDescription>
             </CardHeader>
             <CardContent>
               {posts.filter((p) => p.status === "scheduled").length === 0 ? (
                 <div className="text-center py-8">
                   <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium mb-2">No scheduled posts</h3>
-                  <p className="text-muted-foreground">Create a post and schedule it for later</p>
+                  <h3 className="text-lg font-medium mb-2">{tx("暂无排期帖子", "No scheduled posts")}</h3>
+                  <p className="text-muted-foreground">{tx("先创建帖子并设置发布时间", "Create a post and schedule it for later")}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -413,28 +424,28 @@ export function SocialAutoPoster() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BarChart3 className="w-5 h-5" />
-                Analytics Overview
+                {tx("数据概览", "Analytics Overview")}
               </CardTitle>
-              <CardDescription>Track your social media performance</CardDescription>
+              <CardDescription>{tx("追踪社媒发布效果", "Track your social media performance")}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="text-center p-4 bg-muted rounded-lg">
                   <div className="text-2xl font-bold text-blue-500">1.2K</div>
-                  <p className="text-sm text-muted-foreground">Total Likes</p>
+                  <p className="text-sm text-muted-foreground">{tx("总点赞", "Total Likes")}</p>
                 </div>
                 <div className="text-center p-4 bg-muted rounded-lg">
                   <div className="text-2xl font-bold text-green-500">856</div>
-                  <p className="text-sm text-muted-foreground">Shares</p>
+                  <p className="text-sm text-muted-foreground">{tx("转发", "Shares")}</p>
                 </div>
                 <div className="text-center p-4 bg-muted rounded-lg">
                   <div className="text-2xl font-bold text-purple-500">342</div>
-                  <p className="text-sm text-muted-foreground">Comments</p>
+                  <p className="text-sm text-muted-foreground">{tx("评论", "Comments")}</p>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-lg font-medium">Platform Performance</h3>
+                <h3 className="text-lg font-medium">{tx("平台表现", "Platform Performance")}</h3>
                 {connectedPlatforms.map((platform) => {
                   const Icon = platform.icon
                   const engagement = Math.floor(Math.random() * 1000) + 100
@@ -445,12 +456,12 @@ export function SocialAutoPoster() {
                         <Icon className={`w-6 h-6 ${platform.color}`} />
                         <div>
                           <p className="font-medium">{platform.name}</p>
-                          <p className="text-sm text-muted-foreground">{engagement} total engagements</p>
+                          <p className="text-sm text-muted-foreground">{engagement} {tx("次互动", "total engagements")}</p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-medium">+{Math.floor(Math.random() * 20) + 5}%</p>
-                        <p className="text-xs text-muted-foreground">vs last week</p>
+                        <p className="text-xs text-muted-foreground">{tx("较上周", "vs last week")}</p>
                       </div>
                     </div>
                   )

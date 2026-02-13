@@ -10,6 +10,7 @@ import { I18nProvider } from "@/lib/i18n/context"
 // import { UserProvider } from "@/components/user-context";
 import { Toaster } from "@/components/ui/sonner"
 import { MpDisableZoom } from "@/components/mp-disable-zoom"
+import { MpDownloadGuard } from "@/components/mp-download-guard"
 import "./globals.css"
 import { headers } from 'next/headers'
 
@@ -72,6 +73,7 @@ export default function RootLayout({
             >
               <div className="flex flex-col min-h-screen">
                 <MpDisableZoom />
+                <MpDownloadGuard />
                 <main className="flex-grow">
                   {children}
                 </main>

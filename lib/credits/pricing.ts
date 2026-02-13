@@ -14,6 +14,11 @@ export const TOOL_CREDIT_COSTS = {
   "unit-converter": 1,
   "text-utilities": 1,
   "timezone-converter": 1,
+  "file-compressor": 3,
+  "file-decompressor": 3,
+  "file-encryptor": 4,
+  "file-decryptor": 4,
+  "cloud-drive": 2,
 } as const
 
 export type ToolId = keyof typeof TOOL_CREDIT_COSTS

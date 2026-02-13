@@ -19,6 +19,7 @@ import {
   parseWxMpLoginCallback,
   requestWxMpLogin,
 } from "@/lib/wechat-mp"
+import { signInWithNativeGoogleBridge } from "@/lib/native-google-login"
 
 export function Dashboard() {
   const { language } = useLanguage();
@@ -381,6 +382,35 @@ export function Dashboard() {
   }
 
   const signInWithGoogle = async () => {
+    const nativeResult = await signInWithNativeGoogleBridge({ timeoutMs: 60000 })
+    if (nativeResult.success) {
+      const profileUser = await syncSupabaseProfile(nativeResult.user)
+      if (!profileUser) {
+        return { success: false, error: 'Failed to load profile after native Google login' }
+      }
+
+      localStorage.setItem("user", JSON.stringify(profileUser))
+      updateUser(profileUser)
+      setShowLoginModal(false)
+      setShowRegisterModal(false)
+      return { success: true }
+    }
+
+    if (nativeResult.reason === 'cancelled') {
+      return { success: false, error: language === 'zh' ? '已取消 Google 登录' : 'Google login cancelled' }
+    }
+
+    if (nativeResult.reason === 'native_error' || nativeResult.reason === 'timeout') {
+      return {
+        success: false,
+        error:
+          nativeResult.error ||
+          (language === 'zh'
+            ? '原生 Google 登录失败，请检查 App 配置（包名、google-services.json、web client id）'
+            : 'Native Google login failed. Please verify app config (package, google-services.json, web client id).'),
+      }
+    }
+
     try {
       const { data, error } = await getSupabaseClient().auth.signInWithOAuth({
         provider: 'google',

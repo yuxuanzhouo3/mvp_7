@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { QrCode, Download, Copy, Wifi, User, Link, MessageSquare, Palette } from "lucide-react"
+import { toast } from "sonner"
+import { useLanguage } from "@/components/language-provider"
 
 interface QRCodeData {
   type: "url" | "text" | "wifi" | "contact" | "sms"
@@ -19,7 +21,15 @@ interface QRCodeData {
   backgroundColor: string
 }
 
+function normalizeHexColor(color: string, fallback: string) {
+  const normalized = String(color || "").trim().replace("#", "")
+  return /^[0-9a-fA-F]{6}$/.test(normalized) ? normalized : fallback
+}
+
 export function QrCodeGenerator() {
+  const { language } = useLanguage()
+  const zh = language === "zh"
+
   const [qrData, setQrData] = useState<QRCodeData>({
     type: "url",
     content: "",
@@ -52,74 +62,70 @@ export function QrCodeGenerator() {
   const [generatedQR, setGeneratedQR] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
 
-  const generateQRCode = async () => {
-    setIsGenerating(true)
+  const tx = (zhText: string, enText: string) => (zh ? zhText : enText)
 
-    let content = ""
-
+  const qrContent = useMemo(() => {
     switch (qrData.type) {
       case "url":
       case "text":
-        content = qrData.content
-        break
+        return qrData.content.trim()
       case "wifi":
-        content = `WIFI:T:${wifiData.security};S:${wifiData.ssid};P:${wifiData.password};H:${wifiData.hidden ? "true" : "false"};;`
-        break
+        return `WIFI:T:${wifiData.security};S:${wifiData.ssid};P:${wifiData.password};H:${wifiData.hidden ? "true" : "false"};;`
       case "contact":
-        content = `BEGIN:VCARD\nVERSION:3.0\nFN:${contactData.name}\nTEL:${contactData.phone}\nEMAIL:${contactData.email}\nORG:${contactData.organization}\nURL:${contactData.url}\nEND:VCARD`
-        break
+        return `BEGIN:VCARD\nVERSION:3.0\nFN:${contactData.name}\nTEL:${contactData.phone}\nEMAIL:${contactData.email}\nORG:${contactData.organization}\nURL:${contactData.url}\nEND:VCARD`
       case "sms":
-        content = `sms:${smsData.phone}?body=${encodeURIComponent(smsData.message)}`
-        break
+        return `sms:${smsData.phone}?body=${encodeURIComponent(smsData.message)}`
+      default:
+        return ""
+    }
+  }, [qrData.type, qrData.content, wifiData.security, wifiData.ssid, wifiData.password, wifiData.hidden, contactData.name, contactData.phone, contactData.email, contactData.organization, contactData.url, smsData.phone, smsData.message])
+
+  useEffect(() => {
+    return () => {
+      if (generatedQR?.startsWith("blob:")) {
+        URL.revokeObjectURL(generatedQR)
+      }
+    }
+  }, [generatedQR])
+
+  const generateQRCode = async () => {
+    if (!qrContent) {
+      toast.error(tx("请先填写必填内容", "Please fill required fields first"))
+      return
     }
 
+    setIsGenerating(true)
+
     try {
-      // Mock QR code generation - in real implementation, use a library like qrcode
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const dark = normalizeHexColor(qrData.foregroundColor, "000000")
+      const light = normalizeHexColor(qrData.backgroundColor, "ffffff")
 
-      // Generate a mock QR code data URL
-      const canvas = document.createElement("canvas")
-      canvas.width = qrData.size
-      canvas.height = qrData.size
-      const ctx = canvas.getContext("2d")
-
-      if (ctx) {
-        // Fill background
-        ctx.fillStyle = qrData.backgroundColor
-        ctx.fillRect(0, 0, qrData.size, qrData.size)
-
-        // Draw mock QR pattern
-        ctx.fillStyle = qrData.foregroundColor
-        const moduleSize = qrData.size / 25
-
-        // Draw finder patterns (corners)
-        const drawFinderPattern = (x: number, y: number) => {
-          ctx.fillRect(x * moduleSize, y * moduleSize, 7 * moduleSize, 7 * moduleSize)
-          ctx.fillStyle = qrData.backgroundColor
-          ctx.fillRect((x + 1) * moduleSize, (y + 1) * moduleSize, 5 * moduleSize, 5 * moduleSize)
-          ctx.fillStyle = qrData.foregroundColor
-          ctx.fillRect((x + 2) * moduleSize, (y + 2) * moduleSize, 3 * moduleSize, 3 * moduleSize)
-        }
-
-        drawFinderPattern(0, 0)
-        drawFinderPattern(18, 0)
-        drawFinderPattern(0, 18)
-
-        // Draw some random data modules
-        for (let i = 0; i < 200; i++) {
-          const x = Math.floor(Math.random() * 25)
-          const y = Math.floor(Math.random() * 25)
-          if (Math.random() > 0.5) {
-            ctx.fillRect(x * moduleSize, y * moduleSize, moduleSize, moduleSize)
-          }
+      const endpoint = `/api/tools/qr?size=${qrData.size}&ecc=${qrData.errorCorrection}&dark=${dark}&light=${light}&data=${encodeURIComponent(qrContent)}`
+      const response = await fetch(endpoint, { cache: "no-store" })
+      if (!response.ok) {
+        const fallbackText = tx("二维码生成失败，请检查网络后重试", "Unable to generate QR image. Please check network and retry.")
+        try {
+          const json = await response.json()
+          throw new Error(String(json?.error || fallbackText))
+        } catch {
+          throw new Error(fallbackText)
         }
       }
 
-      setGeneratedQR(canvas.toDataURL())
+      const qrBlob = await response.blob()
+      if (!qrBlob.type.startsWith("image/")) {
+        throw new Error(tx("二维码图片响应无效", "QR image response is invalid"))
+      }
 
-      console.log("Generated QR code for:", content)
-    } catch (error) {
-      console.error("QR generation failed:", error)
+      if (generatedQR?.startsWith("blob:")) {
+        URL.revokeObjectURL(generatedQR)
+      }
+
+      const objectUrl = URL.createObjectURL(qrBlob)
+      setGeneratedQR(objectUrl)
+      toast.success(tx("二维码已生成", "QR code generated"))
+    } catch (error: any) {
+      toast.error(error?.message || tx("二维码生成失败", "QR generation failed"))
     } finally {
       setIsGenerating(false)
     }
@@ -138,11 +144,19 @@ export function QrCodeGenerator() {
     if (!generatedQR) return
 
     try {
+      if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+        toast.error(tx("当前浏览器不支持复制图片", "Image copy is not supported in this browser"))
+        return
+      }
+
       const response = await fetch(generatedQR)
       const blob = await response.blob()
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
+      const mimeType = blob.type || "image/png"
+      await navigator.clipboard.write([new ClipboardItem({ [mimeType]: blob })])
+      toast.success(tx("已复制", "Copied"))
     } catch (error) {
       console.error("Failed to copy to clipboard:", error)
+      toast.error(tx("复制失败", "Copy failed"))
     }
   }
 
@@ -171,9 +185,9 @@ export function QrCodeGenerator() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <QrCode className="w-5 h-5 text-[color:var(--productivity)]" />
-                QR Code Content
+                {tx("二维码内容", "QR Code Content")}
               </CardTitle>
-              <CardDescription>Choose what type of QR code you want to create</CardDescription>
+              <CardDescription>{tx("选择你要生成的二维码类型", "Choose what type of QR code you want to create")}</CardDescription>
             </CardHeader>
             <CardContent>
               <Tabs
@@ -187,7 +201,7 @@ export function QrCodeGenerator() {
                   </TabsTrigger>
                   <TabsTrigger value="text" className="gap-1">
                     <MessageSquare className="w-3 h-3" />
-                    Text
+                    {tx("文本", "Text")}
                   </TabsTrigger>
                   <TabsTrigger value="wifi" className="gap-1">
                     <Wifi className="w-3 h-3" />
@@ -195,7 +209,7 @@ export function QrCodeGenerator() {
                   </TabsTrigger>
                   <TabsTrigger value="contact" className="gap-1">
                     <User className="w-3 h-3" />
-                    Contact
+                    {tx("名片", "Contact")}
                   </TabsTrigger>
                   <TabsTrigger value="sms" className="gap-1">
                     <MessageSquare className="w-3 h-3" />
@@ -205,7 +219,7 @@ export function QrCodeGenerator() {
 
                 <TabsContent value="url" className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="url">Website URL</Label>
+                    <Label htmlFor="url">{tx("网站链接", "Website URL")}</Label>
                     <Input
                       id="url"
                       placeholder="https://example.com"
@@ -217,10 +231,10 @@ export function QrCodeGenerator() {
 
                 <TabsContent value="text" className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="text">Text Content</Label>
+                    <Label htmlFor="text">{tx("文本内容", "Text Content")}</Label>
                     <Textarea
                       id="text"
-                      placeholder="Enter any text you want to encode..."
+                      placeholder={tx("输入要编码的文本...", "Enter any text you want to encode...")}
                       value={qrData.content}
                       onChange={(e) => setQrData((prev) => ({ ...prev, content: e.target.value }))}
                       rows={4}
@@ -231,27 +245,27 @@ export function QrCodeGenerator() {
                 <TabsContent value="wifi" className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="ssid">Network Name (SSID)</Label>
+                      <Label htmlFor="ssid">{tx("网络名称（SSID）", "Network Name (SSID)")}</Label>
                       <Input
                         id="ssid"
-                        placeholder="My WiFi Network"
+                        placeholder={tx("我的 WiFi", "My WiFi Network")}
                         value={wifiData.ssid}
                         onChange={(e) => setWifiData((prev) => ({ ...prev, ssid: e.target.value }))}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="wifi-password">Password</Label>
+                      <Label htmlFor="wifi-password">{tx("密码", "Password")}</Label>
                       <Input
                         id="wifi-password"
                         type="password"
-                        placeholder="WiFi password"
+                        placeholder={tx("WiFi 密码", "WiFi password")}
                         value={wifiData.password}
                         onChange={(e) => setWifiData((prev) => ({ ...prev, password: e.target.value }))}
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Security Type</Label>
+                    <Label>{tx("加密方式", "Security Type")}</Label>
                     <Select
                       value={wifiData.security}
                       onValueChange={(value) => setWifiData((prev) => ({ ...prev, security: value }))}
@@ -262,7 +276,7 @@ export function QrCodeGenerator() {
                       <SelectContent>
                         <SelectItem value="WPA">WPA/WPA2</SelectItem>
                         <SelectItem value="WEP">WEP</SelectItem>
-                        <SelectItem value="nopass">No Password</SelectItem>
+                        <SelectItem value="nopass">{tx("无密码", "No Password")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -271,7 +285,7 @@ export function QrCodeGenerator() {
                 <TabsContent value="contact" className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="contact-name">Full Name</Label>
+                      <Label htmlFor="contact-name">{tx("姓名", "Full Name")}</Label>
                       <Input
                         id="contact-name"
                         placeholder="John Doe"
@@ -280,7 +294,7 @@ export function QrCodeGenerator() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="contact-phone">Phone Number</Label>
+                      <Label htmlFor="contact-phone">{tx("手机号", "Phone Number")}</Label>
                       <Input
                         id="contact-phone"
                         placeholder="+1234567890"
@@ -291,7 +305,7 @@ export function QrCodeGenerator() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="contact-email">Email</Label>
+                      <Label htmlFor="contact-email">{tx("邮箱", "Email")}</Label>
                       <Input
                         id="contact-email"
                         type="email"
@@ -301,10 +315,10 @@ export function QrCodeGenerator() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="contact-org">Organization</Label>
+                      <Label htmlFor="contact-org">{tx("组织/公司", "Organization")}</Label>
                       <Input
                         id="contact-org"
-                        placeholder="Company Name"
+                        placeholder={tx("公司名称", "Company Name")}
                         value={contactData.organization}
                         onChange={(e) => setContactData((prev) => ({ ...prev, organization: e.target.value }))}
                       />
@@ -314,7 +328,7 @@ export function QrCodeGenerator() {
 
                 <TabsContent value="sms" className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="sms-phone">Phone Number</Label>
+                    <Label htmlFor="sms-phone">{tx("手机号", "Phone Number")}</Label>
                     <Input
                       id="sms-phone"
                       placeholder="+1234567890"
@@ -323,10 +337,10 @@ export function QrCodeGenerator() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="sms-message">Message (Optional)</Label>
+                    <Label htmlFor="sms-message">{tx("短信内容（可选）", "Message (Optional)")}</Label>
                     <Textarea
                       id="sms-message"
-                      placeholder="Pre-filled message..."
+                      placeholder={tx("预填短信内容...", "Pre-filled message...")}
                       value={smsData.message}
                       onChange={(e) => setSmsData((prev) => ({ ...prev, message: e.target.value }))}
                       rows={3}
@@ -342,14 +356,14 @@ export function QrCodeGenerator() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Palette className="w-5 h-5 text-[color:var(--productivity)]" />
-                Customization
+                {tx("样式设置", "Customization")}
               </CardTitle>
-              <CardDescription>Customize the appearance of your QR code</CardDescription>
+              <CardDescription>{tx("自定义二维码外观样式", "Customize the appearance of your QR code")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="size">Size (pixels)</Label>
+                  <Label htmlFor="size">{tx("尺寸（像素）", "Size (pixels)")}</Label>
                   <Select
                     value={qrData.size.toString()}
                     onValueChange={(value) => setQrData((prev) => ({ ...prev, size: Number.parseInt(value) }))}
@@ -366,7 +380,7 @@ export function QrCodeGenerator() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="error-correction">Error Correction</Label>
+                  <Label htmlFor="error-correction">{tx("容错级别", "Error Correction")}</Label>
                   <Select
                     value={qrData.errorCorrection}
                     onValueChange={(value) => setQrData((prev) => ({ ...prev, errorCorrection: value as any }))}
@@ -375,17 +389,17 @@ export function QrCodeGenerator() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="L">Low (7%)</SelectItem>
-                      <SelectItem value="M">Medium (15%)</SelectItem>
-                      <SelectItem value="Q">Quartile (25%)</SelectItem>
-                      <SelectItem value="H">High (30%)</SelectItem>
+                      <SelectItem value="L">{tx("低（7%）", "Low (7%)")}</SelectItem>
+                      <SelectItem value="M">{tx("中（15%）", "Medium (15%)")}</SelectItem>
+                      <SelectItem value="Q">{tx("较高（25%）", "Quartile (25%)")}</SelectItem>
+                      <SelectItem value="H">{tx("高（30%）", "High (30%)")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="fg-color">Foreground Color</Label>
+                  <Label htmlFor="fg-color">{tx("前景色", "Foreground Color")}</Label>
                   <div className="flex gap-2">
                     <Input
                       id="fg-color"
@@ -402,7 +416,7 @@ export function QrCodeGenerator() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="bg-color">Background Color</Label>
+                  <Label htmlFor="bg-color">{tx("背景色", "Background Color")}</Label>
                   <div className="flex gap-2">
                     <Input
                       id="bg-color"
@@ -427,8 +441,8 @@ export function QrCodeGenerator() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>QR Code Preview</CardTitle>
-              <CardDescription>Preview your QR code before downloading</CardDescription>
+              <CardTitle>{tx("二维码预览", "QR Code Preview")}</CardTitle>
+              <CardDescription>{tx("下载前先预览二维码效果", "Preview your QR code before downloading")}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col items-center space-y-4">
@@ -445,7 +459,7 @@ export function QrCodeGenerator() {
                   <div className="w-64 h-64 border-2 border-dashed border-muted-foreground/25 rounded-lg flex items-center justify-center">
                     <div className="text-center">
                       <QrCode className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">QR code will appear here</p>
+                      <p className="text-sm text-muted-foreground">{tx("二维码会显示在这里", "QR code will appear here")}</p>
                     </div>
                   </div>
                 )}
@@ -459,12 +473,12 @@ export function QrCodeGenerator() {
                     {isGenerating ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                        Generating...
+                        {tx("生成中...", "Generating...")}
                       </>
                     ) : (
                       <>
                         <QrCode className="w-4 h-4 mr-2" />
-                        Generate QR Code
+                        {tx("生成二维码", "Generate QR Code")}
                       </>
                     )}
                   </Button>
@@ -474,11 +488,11 @@ export function QrCodeGenerator() {
                   <div className="flex gap-2">
                     <Button onClick={downloadQR} variant="outline" className="gap-2 bg-transparent">
                       <Download className="w-4 h-4" />
-                      Download
+                      {tx("下载", "Download")}
                     </Button>
                     <Button onClick={copyToClipboard} variant="outline" className="gap-2 bg-transparent">
                       <Copy className="w-4 h-4" />
-                      Copy
+                      {tx("复制", "Copy")}
                     </Button>
                   </div>
                 )}

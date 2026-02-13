@@ -4,10 +4,13 @@ import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { CheckCircle, Loader2, XCircle } from "lucide-react"
+import { useLanguage } from "@/components/language-provider"
 
 type ConfirmState = "processing" | "success" | "error"
 
 export default function PaymentSuccessPage() {
+  const { language } = useLanguage()
+  const zh = language === "zh"
   const searchParams = useSearchParams()
   const [status, setStatus] = useState<ConfirmState>("processing")
   const [message, setMessage] = useState("正在确认支付结果，请稍候...")
@@ -189,7 +192,11 @@ export default function PaymentSuccessPage() {
         {status === "error" && <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />}
 
         <h1 className="text-2xl font-bold mb-2">
-          {status === "processing" ? "Confirming Payment" : status === "success" ? "Payment Successful" : "Payment Confirm Failed"}
+          {status === "processing"
+            ? (zh ? "正在确认支付" : "Confirming Payment")
+            : status === "success"
+              ? (zh ? "支付成功" : "Payment Successful")
+              : (zh ? "支付确认失败" : "Payment Confirm Failed")}
         </h1>
         <p className="text-muted-foreground mb-6">
           {message}
@@ -199,13 +206,13 @@ export default function PaymentSuccessPage() {
             href="/"
             className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground"
           >
-            Back to Dashboard
+            {zh ? "返回主页" : "Back to Dashboard"}
           </Link>
           <Link
             href="/subscription"
             className="inline-flex w-full items-center justify-center rounded-lg border border-border px-4 py-2.5 font-medium"
           >
-            View Credit Packages
+            {zh ? "查看积分套餐" : "View Credit Packages"}
           </Link>
         </div>
       </div>

@@ -12,6 +12,11 @@ import {
   Calculator,
   Type,
   Globe,
+  FileArchive,
+  FolderOpen,
+  Lock,
+  LockOpen,
+  Cloud,
   Briefcase,
   Users,
   Download,
@@ -97,6 +102,22 @@ export const tools: Tool[] = [
     category: "file-converters",
     icon: ImageIcon,
   },
+  {
+    id: "file-compressor",
+    nameKey: "fileCompressor",
+    descriptionKey: "fileCompressorDesc",
+    category: "file-converters",
+    icon: FileArchive,
+    isNew: true,
+  },
+  {
+    id: "file-decompressor",
+    nameKey: "fileDecompressor",
+    descriptionKey: "fileDecompressorDesc",
+    category: "file-converters",
+    icon: FolderOpen,
+    isNew: true,
+  },
 
   // Productivity Utilities
   {
@@ -133,6 +154,30 @@ export const tools: Tool[] = [
     descriptionKey: "timezoneConverterDesc",
     category: "productivity",
     icon: Globe,
+  },
+  {
+    id: "file-encryptor",
+    nameKey: "fileEncryptor",
+    descriptionKey: "fileEncryptorDesc",
+    category: "productivity",
+    icon: Lock,
+    isNew: true,
+  },
+  {
+    id: "file-decryptor",
+    nameKey: "fileDecryptor",
+    descriptionKey: "fileDecryptorDesc",
+    category: "productivity",
+    icon: LockOpen,
+    isNew: true,
+  },
+  {
+    id: "cloud-drive",
+    nameKey: "cloudDrive",
+    descriptionKey: "cloudDriveDesc",
+    category: "productivity",
+    icon: Cloud,
+    isNew: true,
   },
 ];
 

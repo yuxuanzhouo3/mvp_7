@@ -10,6 +10,7 @@ import { Upload, X, Download, Video, Settings, Scissors } from "lucide-react"
 import { useDropzone } from "react-dropzone"
 import { FFmpeg } from "@ffmpeg/ffmpeg"
 import { fetchFile, toBlobURL } from "@ffmpeg/util"
+import { useLanguage } from "@/components/language-provider"
 
 interface VideoFile {
   id: string
@@ -21,6 +22,10 @@ interface VideoFile {
 }
 
 export function VideoToGifCreator() {
+  const { language } = useLanguage()
+  const zh = language === "zh"
+  const tx = (zhText: string, enText: string) => (zh ? zhText : enText)
+
   const [video, setVideo] = useState<VideoFile | null>(null)
   const [startTime, setStartTime] = useState([0])
   const [endTime, setEndTime] = useState([10])
@@ -94,7 +99,7 @@ export function VideoToGifCreator() {
       setIsEngineReady(true)
     } catch (error) {
       console.error("Failed to load video engine:", error)
-      setEngineError("Failed to load video engine. Please refresh and try again.")
+      setEngineError(tx("视频引擎加载失败，请刷新后重试", "Failed to load video engine. Please refresh and try again."))
     } finally {
       setIsEngineLoading(false)
     }
@@ -113,7 +118,7 @@ export function VideoToGifCreator() {
     try {
       await loadEngine()
       if (!ffmpegRef.current) {
-        throw new Error("Video engine not ready")
+        throw new Error(tx("视频引擎未就绪", "Video engine not ready"))
       }
 
       if (outputUrl) {
@@ -156,7 +161,9 @@ export function VideoToGifCreator() {
       ])
 
       const data = await ffmpeg.readFile(outputName)
-      const blob = new Blob([data], { type: "image/gif" })
+      const bytes = new Uint8Array(data as Uint8Array)
+      const body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+      const blob = new Blob([body], { type: "image/gif" })
       const url = URL.createObjectURL(blob)
       setOutputUrl(url)
 
@@ -200,9 +207,9 @@ export function VideoToGifCreator() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5 text-[color:var(--file-converters)]" />
-            Upload Video
+            {tx("上传视频", "Upload Video")}
           </CardTitle>
-          <CardDescription>Upload a video file to convert to an animated GIF</CardDescription>
+          <CardDescription>{tx("上传视频文件并转换为 GIF 动图", "Upload a video file to convert to an animated GIF")}</CardDescription>
         </CardHeader>
         <CardContent>
           {!video ? (
@@ -217,11 +224,11 @@ export function VideoToGifCreator() {
               <input {...getInputProps()} />
               <Video className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
               {isDragActive ? (
-                <p className="text-[color:var(--file-converters)]">Drop the video here...</p>
+                <p className="text-[color:var(--file-converters)]">{tx("松手即可上传视频", "Drop the video here...")}</p>
               ) : (
                 <div>
-                  <p className="text-lg font-medium mb-2">Drop video here or click to upload</p>
-                  <p className="text-sm text-muted-foreground">Supports MP4, WebM, OGG, AVI, MOV formats</p>
+                  <p className="text-lg font-medium mb-2">{tx("拖拽视频到这里，或点击上传", "Drop video here or click to upload")}</p>
+                  <p className="text-sm text-muted-foreground">{tx("支持 MP4、WebM、OGG、AVI、MOV", "Supports MP4, WebM, OGG, AVI, MOV formats")}</p>
                 </div>
               )}
             </div>
@@ -261,21 +268,21 @@ export function VideoToGifCreator() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings className="w-5 h-5 text-[color:var(--file-converters)]" />
-              GIF Settings
+              {tx("GIF 设置", "GIF Settings")}
             </CardTitle>
-            <CardDescription>Configure your GIF output settings</CardDescription>
+            <CardDescription>{tx("配置 GIF 输出参数", "Configure your GIF output settings")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Time Range */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <Scissors className="w-4 h-4 text-[color:var(--file-converters)]" />
-                <Label>Trim Video</Label>
+                <Label>{tx("裁剪时长", "Trim Video")}</Label>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Start Time: {formatTime(startTime[0])}</Label>
+                  <Label>{tx("开始时间", "Start Time")}: {formatTime(startTime[0])}</Label>
                   <Slider
                     value={startTime}
                     onValueChange={setStartTime}
@@ -287,7 +294,7 @@ export function VideoToGifCreator() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>End Time: {formatTime(endTime[0])}</Label>
+                  <Label>{tx("结束时间", "End Time")}: {formatTime(endTime[0])}</Label>
                   <Slider
                     value={endTime}
                     onValueChange={setEndTime}
@@ -299,42 +306,42 @@ export function VideoToGifCreator() {
                 </div>
               </div>
 
-              <p className="text-sm text-muted-foreground">Duration: {formatTime(endTime[0] - startTime[0])}</p>
+              <p className="text-sm text-muted-foreground">{tx("时长", "Duration")}: {formatTime(endTime[0] - startTime[0])}</p>
             </div>
 
             {/* Quality and Size */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-3">
-                <Label>Quality: {quality[0]}%</Label>
+                <Label>{tx("质量", "Quality")}: {quality[0]}%</Label>
                 <Slider value={quality} onValueChange={setQuality} max={100} min={10} step={5} className="w-full" />
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Smaller file</span>
-                  <span>Better quality</span>
+                  <span>{tx("更小体积", "Smaller file")}</span>
+                  <span>{tx("更高质量", "Better quality")}</span>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Frame Rate (FPS)</Label>
+                <Label>{tx("帧率 (FPS)", "Frame Rate (FPS)")}</Label>
                 <Select value={fps} onValueChange={setFps}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="10">10 FPS (Smaller file)</SelectItem>
-                    <SelectItem value="15">15 FPS (Balanced)</SelectItem>
-                    <SelectItem value="24">24 FPS (Smooth)</SelectItem>
-                    <SelectItem value="30">30 FPS (High quality)</SelectItem>
+                    <SelectItem value="10">{tx("10 FPS（更小体积）", "10 FPS (Smaller file)")}</SelectItem>
+                    <SelectItem value="15">{tx("15 FPS（均衡）", "15 FPS (Balanced)")}</SelectItem>
+                    <SelectItem value="24">{tx("24 FPS（更流畅）", "24 FPS (Smooth)")}</SelectItem>
+                    <SelectItem value="30">{tx("30 FPS（高质量）", "30 FPS (High quality)")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             <div className="space-y-3">
-              <Label>Width: {width[0]}px</Label>
+              <Label>{tx("宽度", "Width")}: {width[0]}px</Label>
               <Slider value={width} onValueChange={setWidth} max={1920} min={240} step={40} className="w-full" />
               <div className="flex justify-between text-xs text-muted-foreground">
-                <span>240px (Small)</span>
-                <span>1920px (Large)</span>
+                <span>{tx("240px（小）", "240px (Small)")}</span>
+                <span>{tx("1920px（大）", "1920px (Large)")}</span>
               </div>
             </div>
           </CardContent>
@@ -353,12 +360,12 @@ export function VideoToGifCreator() {
           {isConverting || isEngineLoading ? (
             <>
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              {isEngineLoading ? "Loading Engine..." : "Creating GIF..."}
+              {isEngineLoading ? tx("加载引擎中...", "Loading Engine...") : tx("生成 GIF 中...", "Creating GIF...")}
             </>
           ) : (
             <>
               <Download className="w-4 h-4" />
-              Create GIF
+              {tx("生成 GIF", "Create GIF")}
             </>
           )}
         </Button>

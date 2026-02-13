@@ -100,14 +100,14 @@ export function MainContent({
 
       {/* Tools Grid */}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {filteredTools.map((tool) => {
           const Icon = tool.icon;
           const creditCost = getToolCreditCost(tool.id)
           return (
             <Card
               key={tool.id}
-              className={`group cursor-pointer transition-all hover:shadow-lg ${getCategoryColor(tool.category)} border-l-4`}
+              className={`group cursor-pointer transition-all hover:shadow-md ${getCategoryColor(tool.category)} border-l-4 h-[136px] overflow-hidden flex flex-col p-0 gap-0`}
               onClick={() => {
                 // Check if tool is uncompleted
                 const uncompletedTools = ["text-multi-sender", "social-auto-poster"]
@@ -124,49 +124,47 @@ export function MainContent({
                 }
               }}
             >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <Icon className="w-5 h-5 text-secondary-foreground" />
+              <CardHeader className="pt-3 px-3.5 pb-1.5 shrink-0">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 bg-secondary rounded-md flex items-center justify-center shrink-0">
+                    <Icon className="w-4 h-4 text-secondary-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <CardTitle className="text-sm text-balance leading-tight line-clamp-1">{getToolName(tool)}</CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`w-7 h-7 p-0 ${favorites.includes(tool.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity shrink-0`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleFavorite(tool.id)
+                        }}
+                      >
+                        <Star
+                          className={`w-4 h-4 ${
+                            favorites.includes(tool.id) ? 'fill-yellow-500 text-yellow-500' : 'text-muted-foreground'
+                          }`}
+                        />
+                      </Button>
                     </div>
-                    <div className="flex-1">
-                      <CardTitle className="text-base text-balance leading-tight">{getToolName(tool)}</CardTitle>
+                    <div className="flex items-center gap-1.5 mt-1">
                       {creditCost !== null && (
-                        <div className="mt-1">
-                          <Badge variant="outline" className="text-[10px] px-2 py-0.5">
-                            {creditCost} {t.common?.credits || "Credits"}
-                          </Badge>
-                        </div>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                          {creditCost} {t.common?.credits || "Credits"}
+                        </Badge>
+                      )}
+                      {tool.isNew && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-normal">
+                          {t.common?.new || "New"}
+                        </Badge>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {tool.isNew && (
-                      <Badge variant="secondary" className="text-xs">
-                        {t.common?.new || "New"}
-                      </Badge>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-8 h-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleFavorite(tool.id)
-                      }}
-                    >
-                      <Star
-                        className={`w-4 h-4 ${
-                          favorites.includes(tool.id) ? 'fill-yellow-500 text-yellow-500' : 'text-muted-foreground'
-                        }`}
-                      />
-                    </Button>
-                  </div>
                 </div>
               </CardHeader>
-              <CardContent>
-                <CardDescription className="text-pretty leading-relaxed">
+              <CardContent className="px-3.5 pb-3 pt-0 flex-1">
+                <CardDescription className="text-xs leading-4 line-clamp-2 min-h-8">
                   {getToolDescription(tool)}
                 </CardDescription>
               </CardContent>

@@ -5,6 +5,8 @@ import { ArrowDownToLine, ArrowLeft, ChevronRight, Monitor, Smartphone } from "l
 import Link from "next/link"
 import { useLanguage } from "@/components/language-provider"
 import { useTranslations } from "@/lib/i18n"
+import { toast } from "sonner"
+import { handleMiniProgramDownload } from "@/lib/mp-download"
 
 type Region = "CN" | "INTL"
 
@@ -67,13 +69,26 @@ export default function DownloadsPage() {
     loadPackages()
   }, [deploymentRegion])
 
-  const handleDownload = (pkg: DownloadPackage) => {
+  const handleDownload = async (pkg: DownloadPackage) => {
     const query = new URLSearchParams({ region: pkg.region })
 
     if (user?.id) query.set("userId", user.id)
     if (user?.email) query.set("userEmail", user.email)
 
-    window.location.href = `/api/downloads/file/${encodeURIComponent(pkg.id)}?${query.toString()}`
+    const downloadUrl = `/api/downloads/file/${encodeURIComponent(pkg.id)}?${query.toString()}`
+    const blockedByMiniProgram = await handleMiniProgramDownload(downloadUrl, {
+      onSuccess: () =>
+        toast.success(
+          language === "zh" ? "已经复制，请到浏览器打开下载" : "Link copied. Open in browser to download."
+        ),
+      onError: () =>
+        toast.error(
+          language === "zh" ? "复制失败，请到浏览器打开下载" : "Copy failed. Please open in browser to download."
+        ),
+    })
+
+    if (blockedByMiniProgram) return
+    window.location.href = downloadUrl
   }
 
   const displayPackages = PLATFORM_ORDER
@@ -146,7 +161,7 @@ export default function DownloadsPage() {
               <button
                 key={`${pkg.region}-${pkg.id}`}
                 type="button"
-                onClick={() => handleDownload(pkg)}
+                onClick={() => void handleDownload(pkg)}
                 className="group text-center"
               >
                 <div

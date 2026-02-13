@@ -41,6 +41,10 @@ interface SmtpConfig {
   pass: string
 }
 
+const MAX_ATTACHMENT_COUNT = 5
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024
+const MAX_TOTAL_ATTACHMENT_SIZE = 20 * 1024 * 1024
+
 export function EmailMultiSender() {
   const { language } = useLanguage();
   const t  = useTranslations(language)
@@ -65,11 +69,73 @@ export function EmailMultiSender() {
     pass: ""
   })
   const [senderName, setSenderName] = useState("")
-  const [smtpGuideProvider, setSmtpGuideProvider] = useState<'gmail' | 'outlook' | 'qq' | '163'>('gmail')
+  const [smtpGuideProvider, setSmtpGuideProvider] = useState<'gmail' | 'outlook' | 'qq' | '163' | 'sina'>('gmail')
   const [sendingRate, setSendingRate] = useState("normal") // slow, normal, fast
   const [sendStats, setSendStats] = useState({ success: 0, failed: 0 })
   const [newRecipientEmail, setNewRecipientEmail] = useState("")
   const [rawRecipientsInput, setRawRecipientsInput] = useState("")
+  const [attachments, setAttachments] = useState<File[]>([])
+
+  const formatFileSize = (size: number) => {
+    if (!Number.isFinite(size) || size <= 0) return "0 B"
+    if (size < 1024) return `${size} B`
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+    return `${(size / 1024 / 1024).toFixed(2)} MB`
+  }
+
+  const getTotalAttachmentSize = (files: File[]) => files.reduce((sum, item) => sum + item.size, 0)
+
+  const handleAttachmentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.target
+    const selected = Array.from(input.files || [])
+    if (selected.length === 0) return
+
+    const merged: File[] = [...attachments]
+
+    for (const file of selected) {
+      const duplicate = merged.some(
+        (item) =>
+          item.name === file.name &&
+          item.size === file.size &&
+          item.lastModified === file.lastModified
+      )
+      if (duplicate) continue
+
+      if (file.size > MAX_ATTACHMENT_SIZE) {
+        toast.error(
+          t.emailMultiSender.attachmentTooLarge ||
+            (language === 'zh' ? `附件 ${file.name} 超过 10MB 限制` : `Attachment ${file.name} exceeds 10MB`) 
+        )
+        continue
+      }
+
+      if (merged.length >= MAX_ATTACHMENT_COUNT) {
+        toast.error(
+          t.emailMultiSender.attachmentCountExceeded ||
+            (language === 'zh' ? '附件最多 5 个' : 'Maximum 5 attachments')
+        )
+        break
+      }
+
+      const nextTotal = getTotalAttachmentSize(merged) + file.size
+      if (nextTotal > MAX_TOTAL_ATTACHMENT_SIZE) {
+        toast.error(
+          t.emailMultiSender.attachmentTotalTooLarge ||
+            (language === 'zh' ? '附件总大小不能超过 20MB' : 'Total attachment size cannot exceed 20MB')
+        )
+        continue
+      }
+
+      merged.push(file)
+    }
+
+    setAttachments(merged)
+    input.value = ''
+  }
+
+  const handleRemoveAttachment = (index: number) => {
+    setAttachments((current) => current.filter((_, i) => i !== index))
+  }
 
   const mergeRecipientLists = (base: Recipient[], incoming: Recipient[]) => {
     const recipientMap = new Map<string, Recipient>()
@@ -153,6 +219,9 @@ export function EmailMultiSender() {
         break
       case '163':
         setSmtpConfig({ ...smtpConfig, host: 'smtp.163.com', port: '465' })
+        break
+      case 'sina':
+        setSmtpConfig({ ...smtpConfig, host: 'smtp.sina.com', port: '465' })
         break
     }
   }
@@ -486,19 +555,26 @@ Best regards,
        const content = processText(baseContent, recipient)
 
        try {
+         const formData = new FormData()
+         formData.set('smtpConfig', JSON.stringify(smtpConfig))
+         formData.set(
+           'mailOptions',
+           JSON.stringify({
+             to: recipient.email,
+             subject,
+             html: content.replace(/\n/g, '<br/>'),
+             fromName: senderName.trim() || undefined,
+           })
+         )
+
+         attachments.forEach((file) => {
+           formData.append('attachments', file, file.name)
+         })
+
          const response = await fetch('/api/tools/email-sender', {
            method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({
-             smtpConfig,
-               mailOptions: {
-                 to: recipient.email,
-                 subject: subject,
-                 html: content.replace(/\n/g, '<br/>'), // Simple plain text to HTML
-                 fromName: senderName.trim() || undefined
-               }
-             })
-           })
+           body: formData,
+         })
 
          const result = await response.json()
 
@@ -744,7 +820,7 @@ Best regards,
                      <Label className="text-xs uppercase text-muted-foreground font-semibold tracking-wider">
                        {language === 'zh' ? 'SMTP 配置教程' : 'SMTP Setup Guide'}
                      </Label>
-                     <Select value={smtpGuideProvider} onValueChange={(value) => setSmtpGuideProvider(value as 'gmail' | 'outlook' | 'qq' | '163')}>
+                     <Select value={smtpGuideProvider} onValueChange={(value) => setSmtpGuideProvider(value as 'gmail' | 'outlook' | 'qq' | '163' | 'sina')}>
                        <SelectTrigger className="w-[180px] h-8">
                          <SelectValue placeholder="Select provider" />
                        </SelectTrigger>
@@ -753,6 +829,7 @@ Best regards,
                          <SelectItem value="outlook">Outlook / M365</SelectItem>
                          <SelectItem value="qq">QQ Mail</SelectItem>
                          <SelectItem value="163">163 Mail</SelectItem>
+                         <SelectItem value="sina">Sina Mail</SelectItem>
                        </SelectContent>
                      </Select>
                    </div>
@@ -866,7 +943,7 @@ Best regards,
                       </div>
                     </div>
                  </div>
-                 ) : (
+                 ) : smtpGuideProvider === '163' ? (
                  <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-3">
                     <div className="space-y-1">
                       <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
@@ -896,6 +973,36 @@ Best regards,
                       </div>
                     </div>
                  </div>
+                 ) : (
+                 <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-3">
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                        {language === 'zh' ? 'Sina 邮箱配置教程（国内可用）' : 'Sina Mail Setup Guide (CN Available)'}
+                      </h4>
+                      <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
+                        {language === 'zh' ? 'Sina 邮箱也可用于国内部署场景。' : 'Sina Mail can also be used in mainland China deployment scenarios.'}
+                      </p>
+                    </div>
+
+                    <ol className="list-decimal pl-4 space-y-1 text-xs text-blue-800/90 dark:text-blue-300/90">
+                      <li>{language === 'zh' ? '进入 Sina 邮箱设置，开启 SMTP 服务。' : 'Enable SMTP service in Sina Mail settings.'}</li>
+                      <li>{language === 'zh' ? '生成邮箱客户端授权码。' : 'Generate mail client authorization code.'}</li>
+                      <li>{language === 'zh' ? '用户名填写完整 Sina 邮箱地址。' : 'Use full Sina mailbox address as username.'}</li>
+                      <li>{language === 'zh' ? '密码填写授权码（不是登录密码）。' : 'Use authorization code as password (not login password).'}</li>
+                    </ol>
+
+                    <div className="rounded-md border border-blue-200/70 bg-white/80 p-3 dark:border-blue-900/60 dark:bg-slate-900/40">
+                      <p className="text-xs font-medium mb-2 text-blue-900 dark:text-blue-200">
+                        {language === 'zh' ? 'Sina 邮箱推荐配置' : 'Sina Mail Recommended Settings'}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <p><span className="text-muted-foreground">{language === 'zh' ? 'SMTP 主机' : 'SMTP Host'}：</span><span className="font-mono">smtp.sina.com</span></p>
+                        <p><span className="text-muted-foreground">{language === 'zh' ? '端口' : 'Port'}：</span><span className="font-mono">465</span></p>
+                        <p><span className="text-muted-foreground">{language === 'zh' ? '用户名' : 'Username'}：</span><span className="font-mono">your@sina.com</span></p>
+                        <p><span className="text-muted-foreground">{language === 'zh' ? '密码' : 'Password'}：</span><span className="font-mono">{language === 'zh' ? 'SMTP 授权码' : 'SMTP authorization code'}</span></p>
+                      </div>
+                    </div>
+                 </div>
                  )}
                  </div>
 
@@ -907,6 +1014,7 @@ Best regards,
                       <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('outlook')} className="bg-white dark:bg-slate-950">Outlook</Button>
                       <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('qq')} className="bg-white dark:bg-slate-950">QQ Mail</Button>
                       <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('163')} className="bg-white dark:bg-slate-950">163 Mail</Button>
+                      <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('sina')} className="bg-white dark:bg-slate-950">Sina Mail</Button>
                     </div>
                  </div>
 
@@ -968,8 +1076,8 @@ Best regards,
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <span>
                       {language === 'zh'
-                        ? '提示：国内网络环境下，Gmail/Outlook 等海外邮箱 SMTP 可能不可达或不稳定。建议优先使用 QQ 邮箱、163 邮箱或企业邮箱。'
-                        : 'Tip: In mainland China network environments, overseas SMTP providers like Gmail/Outlook may be unreachable or unstable. Prefer QQ Mail, 163 Mail, or local enterprise mail.'}
+                        ? '提示：国内网络环境下，Gmail/Outlook 等海外邮箱 SMTP 可能不可达或不稳定。建议优先使用 QQ、163、Sina 邮箱或企业邮箱。'
+                        : 'Tip: In mainland China network environments, overseas SMTP providers like Gmail/Outlook may be unreachable or unstable. Prefer QQ/163/Sina Mail or local enterprise mail.'}
                     </span>
                  </div>
               </CardContent>
@@ -1059,6 +1167,46 @@ Best regards,
                     </div>
                 )}
                 </div>
+
+                <div className="space-y-4 pt-2">
+                  <div className="space-y-2">
+                    <Label className="text-base">{t.emailMultiSender.attachmentsLabel || 'Attachments'}</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {t.emailMultiSender.attachmentsHint || 'Up to 5 files, 10MB per file, 20MB total'}
+                    </p>
+                    <Input type="file" multiple onChange={handleAttachmentUpload} />
+                  </div>
+
+                  {attachments.length > 0 ? (
+                    <div className="space-y-2">
+                      {attachments.map((file, index) => (
+                        <div
+                          key={`${file.name}_${file.size}_${file.lastModified}`}
+                          className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{file.name}</p>
+                            <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveAttachment(index)}
+                            disabled={isSending}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <p className="text-xs text-muted-foreground">
+                        {(t.emailMultiSender.attachmentsSummary || '{count} files, {size} total')
+                          .replace('{count}', String(attachments.length))
+                          .replace('{size}', formatFileSize(getTotalAttachmentSize(attachments)))}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -1122,6 +1270,7 @@ Best regards,
                     </div>
                   </div>
                 </div>
+
               </CardContent>
             </Card>
           </TabsContent>

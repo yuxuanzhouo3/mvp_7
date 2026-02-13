@@ -92,7 +92,7 @@ export function DataScraperPro() {
 
     const newJob: ScrapingJob = {
       id: Date.now().toString(),
-      name: currentJob.name || `Scrape ${urlObj.hostname}`,
+      name: currentJob.name || `${tr("scrape")} ${urlObj.hostname}`,
       url: currentJob.url,
       dataTypes: selectedDataTypes,
       status: "running",
@@ -120,7 +120,7 @@ export function DataScraperPro() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Scraping failed');
+        throw new Error(result.error || tr("scrapingFailedSimple"));
       }
 
       setScrapedData((prev) => [...prev, ...result.data]);
@@ -132,12 +132,12 @@ export function DataScraperPro() {
         results: result.count
       } : job)));
 
-      toast.success(`Scraping completed! Found ${result.count} items.`);
+      toast.success(tr("scrapingCompleted").replace("{count}", String(result.count)));
 
     } catch (error: any) {
       console.error(error);
       setJobs((prev) => prev.map((job) => (job.id === newJob.id ? { ...job, status: "error", progress: 0 } : job)));
-      toast.error(`Scraping failed: ${error.message}`);
+      toast.error(tr("scrapingFailed").replace("{error}", String(error?.message || tr("unknownError"))));
     } finally {
       setIsRunning(false)
       setCurrentJob({ name: "", url: "", dataTypes: [] })
@@ -156,7 +156,7 @@ export function DataScraperPro() {
   }
 
   const convertToCSV = (data: ScrapedData[]) => {
-    const headers = ["Type", "Value", "Source", "Confidence"]
+    const headers = [tr("type"), tr("value"), tr("source"), tr("confidence")]
     const rows = data.map((item) => [item.type, item.value, item.source, item.confidence.toString()])
     return [headers, ...rows].map((row) => row.join(",")).join("\n")
   }
@@ -168,6 +168,13 @@ export function DataScraperPro() {
       case 'error': return 'destructive'
       default: return 'outline'
     }
+  }
+
+  const statusLabel = (status: ScrapingJob["status"]) => {
+    if (status === "running") return tr("running")
+    if (status === "completed") return tr("completed")
+    if (status === "error") return tr("error")
+    return tr("idle")
   }
 
   return (
@@ -204,11 +211,11 @@ export function DataScraperPro() {
                           className="h-10 font-mono text-sm"
                         />
                      </div>
-                     <p className="text-xs text-muted-foreground pl-1">Starting point for the scraping job.</p>
+                     <p className="text-xs text-muted-foreground pl-1">{tr("startingPointForJob")}</p>
                   </div>
                   
                   <div className="space-y-2 pt-2">
-                     <Label className="text-sm font-medium">{tr("jobName")} <span className="text-muted-foreground font-normal">(Optional)</span></Label>
+                     <Label className="text-sm font-medium">{tr("jobName")} <span className="text-muted-foreground font-normal">({tr("optional")})</span></Label>
                      <Input
                         id="job-name"
                         value={currentJob.name || ""}
@@ -251,7 +258,7 @@ export function DataScraperPro() {
                 {selectedDataTypes.length === 0 && (
                   <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg text-sm text-yellow-800 dark:text-yellow-200">
                     <AlertCircle className="w-4 h-4" />
-                    <span>Select at least one data type to extract</span>
+                    <span>{tr("selectAtLeastOneDataType")}</span>
                   </div>
                 )}
               </CardContent>
@@ -267,7 +274,7 @@ export function DataScraperPro() {
                       <Database className="w-5 h-5" />
                       {tr("dataFound")}
                     </CardTitle>
-                    <CardDescription>{scrapedData.length} records extracted</CardDescription>
+                    <CardDescription>{scrapedData.length} {tr("recordsExtracted")}</CardDescription>
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => exportData("csv")} disabled={scrapedData.length === 0}>
@@ -287,27 +294,27 @@ export function DataScraperPro() {
                     <div className="bg-muted/30 p-4 rounded-full mb-4">
                         <Search className="w-8 h-8 opacity-40" />
                     </div>
-                    <h3 className="text-lg font-medium mb-1">No data extracted yet</h3>
-                    <p className="text-sm">Run a scraping job to see extracted data here</p>
+                    <h3 className="text-lg font-medium mb-1">{tr("noDataExtracted")}</h3>
+                    <p className="text-sm">{tr("runJobToSeeData")}</p>
                   </div>
                 ) : (
                   <div className="h-full flex flex-col">
                     <div className="p-4 border-b bg-muted/5 flex items-center gap-4">
                       <Select defaultValue="all">
                         <SelectTrigger className="w-[180px] h-9">
-                          <SelectValue placeholder="Filter by type" />
+                          <SelectValue placeholder={tr("filterByType")} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">All Types</SelectItem>
-                          <SelectItem value="email">Email Addresses</SelectItem>
-                          <SelectItem value="phone">Phone Numbers</SelectItem>
-                          <SelectItem value="names">Names</SelectItem>
-                          <SelectItem value="companies">Companies</SelectItem>
+                          <SelectItem value="all">{tr("allTypes")}</SelectItem>
+                          <SelectItem value="email">{tr("emailAddresses")}</SelectItem>
+                          <SelectItem value="phone">{tr("phoneNumbers")}</SelectItem>
+                          <SelectItem value="names">{tr("names")}</SelectItem>
+                          <SelectItem value="companies">{tr("companies")}</SelectItem>
                         </SelectContent>
                       </Select>
                       <div className="relative flex-1">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Search within results..." className="pl-9 h-9" />
+                        <Input placeholder={tr("searchWithinResults")} className="pl-9 h-9" />
                       </div>
                     </div>
 
@@ -338,7 +345,7 @@ export function DataScraperPro() {
                               </div>
                             </div>
                             <div className="flex items-center justify-between sm:justify-end gap-4 text-xs text-muted-foreground pl-11 sm:pl-0">
-                                <span className={item.confidence > 80 ? "text-green-600" : "text-yellow-600"}>{item.confidence}% match</span>
+                                <span className={item.confidence > 80 ? "text-green-600" : "text-yellow-600"}>{item.confidence}% {tr("match")}</span>
                                 <Button variant="ghost" size="icon" className="h-6 w-6">
                                     <Eye className="w-3 h-3" />
                                 </Button>
@@ -409,7 +416,7 @@ export function DataScraperPro() {
                           <SelectItem value="500">{tr("fiveHundredPages")}</SelectItem>
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">Limit pages to prevent over-usage.</p>
+                      <p className="text-xs text-muted-foreground">{tr("limitPagesHint")}</p>
                     </div>
                 </div>
               </CardContent>
@@ -424,7 +431,7 @@ export function DataScraperPro() {
               <CardHeader className="pb-3 border-b bg-muted/20">
                   <CardTitle className="text-lg flex items-center justify-between">
                       {tr("activeJobs")}
-                      <Badge variant="secondary">{isRunning ? 'Running' : 'Ready'}</Badge>
+                      <Badge variant="secondary">{isRunning ? tr("running") : tr("ready")}</Badge>
                   </CardTitle>
               </CardHeader>
               <CardContent className="pt-6 space-y-6">
@@ -432,11 +439,11 @@ export function DataScraperPro() {
                  <div className="grid grid-cols-2 gap-3">
                     <div className="bg-muted/30 p-3 rounded-lg text-center border">
                         <span className="block text-2xl font-bold">{scrapedData.length}</span>
-                        <span className="text-[10px] uppercase text-muted-foreground font-semibold">items found</span>
+                        <span className="text-[10px] uppercase text-muted-foreground font-semibold">{tr("itemsFound")}</span>
                     </div>
                     <div className="bg-muted/30 p-3 rounded-lg text-center border">
                         <span className="block text-2xl font-bold">{jobs.length}</span>
-                        <span className="text-[10px] uppercase text-muted-foreground font-semibold">jobs run</span>
+                        <span className="text-[10px] uppercase text-muted-foreground font-semibold">{tr("jobsRun")}</span>
                     </div>
                  </div>
 
@@ -460,18 +467,18 @@ export function DataScraperPro() {
                         )}
                     </Button>
                     {!currentJob.url && !isRunning && (
-                       <p className="text-xs text-center text-muted-foreground pt-2">Enter a URL to start scraping</p>
+                       <p className="text-xs text-center text-muted-foreground pt-2">{tr("enterUrlToStart")}</p>
                     )}
                  </div>
 
                  {/* Recent Jobs List */}
                  <div className="space-y-3 pt-2">
                      <h4 className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-2">
-                        <Database className="w-3 h-3" /> Recent Activity
+                        <Database className="w-3 h-3" /> {tr("recentActivity")}
                      </h4>
                      {jobs.length === 0 ? (
                         <div className="text-sm text-muted-foreground text-center py-4 italic border-t border-dashed">
-                           No jobs run yet
+                           {tr("noJobsRunYet")}
                         </div>
                      ) : (
                         <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
@@ -479,14 +486,14 @@ export function DataScraperPro() {
                               <div key={job.id} className="p-3 border rounded-md text-sm bg-background hover:bg-muted/20 transition-colors">
                                   <div className="flex items-center justify-between mb-2">
                                      <span className="font-medium truncate max-w-[120px]">{job.name}</span>
-                                     <Badge variant={getStatusBadgeVariant(job.status)} className="text-[10px] h-5 px-1.5">{job.status}</Badge>
+                                     <Badge variant={getStatusBadgeVariant(job.status)} className="text-[10px] h-5 px-1.5">{statusLabel(job.status)}</Badge>
                                   </div>
                                   <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden mb-2">
                                       <div className="bg-primary h-full transition-all duration-500" style={{width: `${job.progress}%`}} />
                                   </div>
                                   <div className="flex justify-between text-xs text-muted-foreground">
                                       <span className="truncate max-w-[140px]">{new URL(job.url).hostname}</span>
-                                      <span>{job.results} items</span>
+                                      <span>{job.results} {tr("items")}</span>
                                   </div>
                               </div>
                            ))}

@@ -582,13 +582,20 @@ export function AuthModal({
                       type="button"
                       disabled={isSubmitting}
                       onClick={async () => {
+                        if (isSubmitting) return
+
                         setIsSubmitting(true)
                         setFormError(null)
                         setFormSuccess(null)
 
-                        const result = await signInWithGoogle()
-                        if (!result.success) {
-                          setFormError(result.error || t.auth?.googleLoginFailed || "Google login failed")
+                        try {
+                          const result = await signInWithGoogle()
+                          if (!result.success) {
+                            setFormError(result.error || t.auth?.googleLoginFailed || "Google login failed")
+                          }
+                        } catch (error: any) {
+                          setFormError(error?.message || t.auth?.googleLoginFailed || "Google login failed")
+                        } finally {
                           setIsSubmitting(false)
                         }
                       }}
