@@ -174,9 +174,9 @@ export async function POST(req: Request) {
 
     // 生成追踪ID并注入追踪像素
     const trackingId = generateTrackingId()
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000'
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '')
+      || 'http://localhost:3000'
 
     const originalHtml = mailOptions.html || ''
     const htmlWithTracking = injectTrackingPixel(originalHtml, trackingId, baseUrl)
