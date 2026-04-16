@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import { grantReferralFirstUseReward } from "@/lib/market/referrals"
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
 const MAX_ATTACHMENT_COUNT = 5
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024
@@ -30,6 +31,14 @@ function isConnectionTimeoutError(error: any): boolean {
   )
 }
 
+function isRetryableError(error: any): boolean {
+  return (
+    isConnectionTimeoutError(error) ||
+    String(error?.code || '').toUpperCase() === 'ECONNRESET' ||
+    String(error?.message || '').toLowerCase().includes('connection closed')
+  )
+}
+
 function createTransporter(smtpConfig: any, port: number) {
   return nodemailer.createTransport({
     host: smtpConfig.host,
@@ -39,9 +48,9 @@ function createTransporter(smtpConfig: any, port: number) {
       user: smtpConfig.user,
       pass: smtpConfig.pass,
     },
-    connectionTimeout: 12000,
-    greetingTimeout: 12000,
-    socketTimeout: 12000,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 15000,
   })
 }
 
@@ -55,6 +64,41 @@ async function verifyAndSendWithPort(port: number, smtpConfig: any, mailOptions:
     html: mailOptions.html,
     attachments: Array.isArray(mailOptions.attachments) ? mailOptions.attachments : undefined,
   })
+}
+
+// 带重试的发送
+async function sendWithRetry(port: number, smtpConfig: any, mailOptions: any, maxRetries = 1): Promise<any> {
+  let lastError: any = null
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await verifyAndSendWithPort(port, smtpConfig, mailOptions)
+    } catch (error: any) {
+      lastError = error
+      if (attempt < maxRetries && isRetryableError(error)) {
+        console.log(`[email-sender] Retry attempt ${attempt + 1} for ${mailOptions.to}`)
+        // 重试前等待 2-4 秒
+        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 2000))
+        continue
+      }
+      throw error
+    }
+  }
+  throw lastError
+}
+
+function generateTrackingId(): string {
+  return `trk_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
+}
+
+function injectTrackingPixel(html: string, trackingId: string, baseUrl: string): string {
+  const trackingUrl = `${baseUrl}/api/tools/email-sender/track/${trackingId}`
+  const pixel = `<img src="${trackingUrl}" width="1" height="1" style="display:none;border:0;" alt="" />`
+
+  // 在 </body> 前插入，如果没有 </body> 则追加到末尾
+  if (html.includes('</body>')) {
+    return html.replace('</body>', `${pixel}</body>`)
+  }
+  return html + pixel
 }
 
 function parseJsonText(value: FormDataEntryValue | null, key: string) {
@@ -117,6 +161,7 @@ export async function POST(req: Request) {
   try {
     const { smtpConfig, mailOptions, attachments } = await parsePayload(req)
     const requestUserId = String(req.headers.get("x-user-id") || "").trim()
+    const taskId = String(req.headers.get("x-task-id") || "").trim()
 
     if (!smtpConfig || !mailOptions) {
       return NextResponse.json(
@@ -126,17 +171,47 @@ export async function POST(req: Request) {
     }
 
     const primaryPort = Number(smtpConfig.port)
+
+    // 生成追踪ID并注入追踪像素
+    const trackingId = generateTrackingId()
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000'
+
+    const originalHtml = mailOptions.html || ''
+    const htmlWithTracking = injectTrackingPixel(originalHtml, trackingId, baseUrl)
+
     const finalMailOptions = {
       ...mailOptions,
+      html: htmlWithTracking,
       attachments,
     }
 
     let info: any
 
     try {
-      info = await verifyAndSendWithPort(primaryPort, smtpConfig, finalMailOptions)
+      info = await sendWithRetry(primaryPort, smtpConfig, finalMailOptions)
     } catch (verifyError: any) {
       console.error('SMTP Connection Failed:', verifyError)
+
+      // 记录失败日志
+      if (requestUserId && taskId) {
+        await supabaseAdmin
+          .from('email_send_logs')
+          .insert({
+            user_id: requestUserId,
+            task_id: taskId,
+            recipient_email: mailOptions.to,
+            recipient_name: mailOptions.recipientName || null,
+            subject: mailOptions.subject,
+            status: 'failed',
+            error_message: verifyError.message,
+            smtp_host: smtpConfig.host,
+            tracking_id: trackingId,
+          })
+          .catch((e: any) => console.error('[email-sender] log insert error:', e))
+      }
+
       return NextResponse.json(
         {
           success: false,
@@ -154,6 +229,24 @@ export async function POST(req: Request) {
 
     console.log('Message sent: %s', info.messageId)
 
+    // 记录成功日志
+    if (requestUserId && taskId) {
+      await supabaseAdmin
+        .from('email_send_logs')
+        .insert({
+          user_id: requestUserId,
+          task_id: taskId,
+          recipient_email: mailOptions.to,
+          recipient_name: mailOptions.recipientName || null,
+          subject: mailOptions.subject,
+          status: 'sent',
+          smtp_host: smtpConfig.host,
+          message_id: info.messageId,
+          tracking_id: trackingId,
+        })
+        .catch((e: any) => console.error('[email-sender] log insert error:', e))
+    }
+
     if (requestUserId) {
       await grantReferralFirstUseReward({
         invitedUserId: requestUserId,
@@ -161,7 +254,12 @@ export async function POST(req: Request) {
       }).catch(() => null)
     }
 
-    return NextResponse.json({ success: true, messageId: info.messageId, usedPort: primaryPort })
+    return NextResponse.json({
+      success: true,
+      messageId: info.messageId,
+      usedPort: primaryPort,
+      trackingId,
+    })
   } catch (error: any) {
     console.error('Email sending error:', error)
     return NextResponse.json(

@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useLanguage } from "@/components/language-provider";
 import { useTranslations } from '@/lib/i18n'
 import { useUser } from "@/hooks/use-user"
@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
-import { Upload, Mail, Users, FileText, Send, Clock, CheckCircle, AlertCircle, Eye, Settings, Plus, Trash2, X } from "lucide-react"
+import { Upload, Mail, Users, FileText, Send, Clock, CheckCircle, AlertCircle, Eye, Settings, Plus, Trash2, X, Save, History, RefreshCw, ArrowLeft, Download, MailOpen, MailX } from "lucide-react"
 import { toast } from "sonner"
 import { emitToolSuccess } from "@/lib/credits/tool-success"
 
@@ -25,6 +25,14 @@ interface EmailTemplate {
   name: string
   subject: string
   content: string
+}
+
+interface UserTemplate {
+  id: number
+  name: string
+  subject: string
+  content: string
+  created_at: string
 }
 
 interface Recipient {
@@ -41,6 +49,31 @@ interface SmtpConfig {
   port: string
   user: string
   pass: string
+}
+
+interface SendTask {
+  taskId: string
+  subject: string
+  smtpHost: string
+  total: number
+  sent: number
+  failed: number
+  opened: number
+  createdAt: string
+}
+
+interface SendLogDetail {
+  id: number
+  recipient_email: string
+  recipient_name: string
+  subject: string
+  status: string
+  error_message: string | null
+  message_id: string | null
+  tracking_id: string | null
+  opened_at: string | null
+  open_count: number
+  created_at: string
 }
 
 const MAX_ATTACHMENT_COUNT = 5
@@ -78,6 +111,139 @@ export function EmailMultiSender() {
   const [newRecipientEmail, setNewRecipientEmail] = useState("")
   const [rawRecipientsInput, setRawRecipientsInput] = useState("")
   const [attachments, setAttachments] = useState<File[]>([])
+
+  // User templates state
+  const [userTemplates, setUserTemplates] = useState<UserTemplate[]>([])
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false)
+  const [newTemplateName, setNewTemplateName] = useState("")
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false)
+
+  // Send history state
+  const [sendTasks, setSendTasks] = useState<SendTask[]>([])
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [taskDetails, setTaskDetails] = useState<SendLogDetail[]>([])
+  const [taskStats, setTaskStats] = useState<any>(null)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+
+  // Current task results
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
+  const [activeMainTab, setActiveMainTab] = useState("recipients")
+
+  // Load user templates on mount
+  useEffect(() => {
+    if (user?.id) {
+      loadUserTemplates()
+    }
+  }, [user?.id])
+
+  const loadUserTemplates = async () => {
+    if (!user?.id) return
+    setIsLoadingTemplates(true)
+    try {
+      const res = await fetch('/api/tools/email-sender/templates', {
+        headers: { 'x-user-id': String(user.id) },
+      })
+      const data = await res.json()
+      if (data.success) {
+        setUserTemplates(data.templates || [])
+      }
+    } catch (e) {
+      console.error('[email-templates] load error:', e)
+    } finally {
+      setIsLoadingTemplates(false)
+    }
+  }
+
+  const handleSaveTemplate = async () => {
+    if (!user?.id) {
+      toast.error(t.emailMultiSender.loginRequiredForTemplates)
+      return
+    }
+    if (!newTemplateName.trim()) return
+    try {
+      const res = await fetch('/api/tools/email-sender/templates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': String(user.id),
+        },
+        body: JSON.stringify({
+          name: newTemplateName.trim(),
+          subject: customSubject,
+          content: customContent,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(t.emailMultiSender.templateSaved)
+        setNewTemplateName("")
+        setShowSaveTemplate(false)
+        loadUserTemplates()
+      }
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }
+
+  const handleDeleteTemplate = async (templateId: number) => {
+    if (!user?.id) return
+    try {
+      const res = await fetch(`/api/tools/email-sender/templates?id=${templateId}`, {
+        method: 'DELETE',
+        headers: { 'x-user-id': String(user.id) },
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(t.emailMultiSender.templateDeleted)
+        loadUserTemplates()
+      }
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }
+
+  const handleLoadUserTemplate = (tmpl: UserTemplate) => {
+    setSelectedTemplate('custom')
+    setCustomSubject(tmpl.subject)
+    setCustomContent(tmpl.content)
+    toast.success(t.emailMultiSender.templateLoaded)
+  }
+
+  // Send history functions
+  const loadSendHistory = async () => {
+    if (!user?.id) return
+    setIsLoadingHistory(true)
+    try {
+      const res = await fetch('/api/tools/email-sender/logs', {
+        headers: { 'x-user-id': String(user.id) },
+      })
+      const data = await res.json()
+      if (data.success) {
+        setSendTasks(data.tasks || [])
+      }
+    } catch (e) {
+      console.error('[email-history] load error:', e)
+    } finally {
+      setIsLoadingHistory(false)
+    }
+  }
+
+  const loadTaskDetails = async (taskId: string) => {
+    if (!user?.id) return
+    try {
+      const res = await fetch(`/api/tools/email-sender/logs?taskId=${taskId}`, {
+        headers: { 'x-user-id': String(user.id) },
+      })
+      const data = await res.json()
+      if (data.success) {
+        setTaskDetails(data.logs || [])
+        setTaskStats(data.stats || null)
+        setSelectedTaskId(taskId)
+      }
+    } catch (e) {
+      console.error('[email-history] detail error:', e)
+    }
+  }
 
   const formatFileSize = (size: number) => {
     if (!Number.isFinite(size) || size <= 0) return "0 B"
@@ -517,15 +683,24 @@ Best regards,
     setSendProgress(0)
     setSendStats({ success: 0, failed: 0 })
 
+    // Generate a unique task ID for this batch
+    const taskId = `task_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+    setCurrentTaskId(taskId)
+
     const total = recipients.length
     let processed = 0
     let successCount = 0
     let failedCount = 0
     
-    // Determine delay based on rate
-    let delay = 2000
-    if (sendingRate === 'slow') delay = 5000
-    if (sendingRate === 'fast') delay = 1000
+    // Determine delay with random jitter to improve deliverability
+    const getDelay = () => {
+      let base = 2000
+      if (sendingRate === 'slow') base = 5000
+      if (sendingRate === 'fast') base = 1000
+      // Add ±30% jitter
+      const jitter = base * 0.3
+      return base + (Math.random() * 2 - 1) * jitter
+    }
 
     const template = templates.find(t => t.id === selectedTemplate)
     const baseSubject = selectedTemplate === 'custom' ? customSubject : template?.subject || ''
@@ -543,8 +718,6 @@ Best regards,
     const newRecipients = [...recipients]
 
     for (let i = 0; i < total; i++) {
-       // Check if cancelled (optional implementation)
-      
        const recipient = newRecipients[i]
        
        // Skip if already sent successfully (in case of retry)
@@ -567,6 +740,7 @@ Best regards,
              subject,
              html: content.replace(/\n/g, '<br/>'),
              fromName: senderName.trim() || undefined,
+             recipientName: recipient.name,
            })
          )
 
@@ -574,9 +748,13 @@ Best regards,
            formData.append('attachments', file, file.name)
          })
 
+         const headers: Record<string, string> = {}
+         if (user?.id) headers["x-user-id"] = String(user.id)
+         if (taskId) headers["x-task-id"] = taskId
+
          const response = await fetch('/api/tools/email-sender', {
            method: 'POST',
-           headers: user?.id ? { "x-user-id": String(user.id) } : undefined,
+           headers,
            body: formData,
          })
 
@@ -612,15 +790,15 @@ Best regards,
        }
 
        // Update UI
-       setRecipients([...newRecipients]) // Trigger re-render to show per-user status
+       setRecipients([...newRecipients])
        setSendStats({ success: successCount, failed: failedCount })
        
        processed++
        setSendProgress(Math.round((processed / total) * 100))
 
-       // Wait before next email
+       // Wait before next email with random jitter
        if (i < total - 1) {
-         await new Promise(resolve => setTimeout(resolve, delay))
+         await new Promise(resolve => setTimeout(resolve, getDelay()))
        }
     }
 
@@ -631,6 +809,13 @@ Best regards,
     toast.success(t.emailMultiSender.campaignFinished || "Email campaign finished!", {
       description: `${t.emailMultiSender.sentCount || "Sent"}: ${successCount}, ${t.emailMultiSender.failedCount || "Failed"}: ${failedCount}`,
     })
+
+    // Auto-switch to send results view
+    setActiveMainTab("history")
+    if (user?.id) {
+      // Small delay to allow backend to finish writing logs
+      setTimeout(() => loadSendHistory(), 1500)
+    }
   }
 
   const getTemplateContent = (template: EmailTemplate) => {
@@ -661,18 +846,44 @@ Best regards,
     document.body.removeChild(link)
   }
 
+  const exportResults = (logs: SendLogDetail[]) => {
+    const headers = "Email,Name,Status,Error,Opened,Open Count,Opened At"
+    const rows = logs.map(log => {
+      return [
+        log.recipient_email,
+        log.recipient_name || '',
+        log.status,
+        log.error_message || '',
+        log.open_count > 0 ? 'Yes' : 'No',
+        log.open_count,
+        log.opened_at || '',
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+    })
+    const csvContent = "data:text/csv;charset=utf-8," + headers + "\n" + rows.join("\n")
+    const link = document.createElement("a")
+    link.setAttribute("href", encodeURI(csvContent))
+    link.setAttribute("download", `email_results_${Date.now()}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   const isConfigValid = smtpConfig.host && smtpConfig.user && smtpConfig.pass
   const isReadyToSend = recipients.length > 0 && selectedTemplate && isConfigValid
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       <div className="lg:col-span-8 space-y-6">
-        <Tabs defaultValue="recipients" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+        <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="recipients">{t.emailMultiSender.recipients}</TabsTrigger>
             <TabsTrigger value="template">{t.emailMultiSender.template}</TabsTrigger>
             <TabsTrigger value="configuration">{t.emailMultiSender.configTab}</TabsTrigger>
             <TabsTrigger value="settings">{t.emailMultiSender.settingsTab}</TabsTrigger>
+            <TabsTrigger value="history" onClick={() => { if (user?.id) loadSendHistory() }}>
+              <History className="w-4 h-4 mr-1" />
+              {t.emailMultiSender.sendHistory}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="recipients" className="space-y-4">
@@ -827,7 +1038,7 @@ Best regards,
                      <Label className="text-xs uppercase text-muted-foreground font-semibold tracking-wider">
                        {language === 'zh' ? 'SMTP 配置教程' : 'SMTP Setup Guide'}
                      </Label>
-                     <Select value={smtpGuideProvider} onValueChange={(value) => setSmtpGuideProvider(value as 'gmail' | 'outlook' | 'qq' | '163' | 'sina')}>
+                     <Select value={smtpGuideProvider} onValueChange={(value) => setSmtpGuideProvider(value as any)}>
                        <SelectTrigger className="w-[180px] h-8">
                          <SelectValue placeholder="Select provider" />
                        </SelectTrigger>
@@ -841,176 +1052,18 @@ Best regards,
                      </Select>
                    </div>
 
-                 {smtpGuideProvider === 'gmail' ? (
-                 <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-3">
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
-                        {t.emailMultiSender.gmailGuideTitle || "Gmail 配置教程（推荐）"}
-                      </h4>
-                      <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
-                        {t.emailMultiSender.gmailGuideDesc || "按步骤获取应用专用密码并填写 SMTP，即可开始群发。"}
-                      </p>
-                    </div>
-
-                    <ol className="list-decimal pl-4 space-y-1 text-xs text-blue-800/90 dark:text-blue-300/90">
-                      <li>{t.emailMultiSender.gmailGuideStep1 || "先在 Google 账号开启两步验证。"}</li>
-                      <li>{t.emailMultiSender.gmailGuideStep2 || "进入应用专用密码页面，创建“邮件”应用密码。"}</li>
-                      <li>{t.emailMultiSender.gmailGuideStep3 || "复制 16 位应用专用密码（不是邮箱登录密码）。"}</li>
-                      <li>{t.emailMultiSender.gmailGuideStep4 || "点击 Gmail 预设自动填主机端口，再填写邮箱和应用专用密码。"}</li>
-                      <li>{t.emailMultiSender.gmailGuideStep5 || "先用 1-2 个地址测试，再正式批量发送。"}</li>
-                    </ol>
-
-                    <div className="rounded-md border border-blue-200/70 bg-white/80 p-3 dark:border-blue-900/60 dark:bg-slate-900/40">
-                      <p className="text-xs font-medium mb-2 text-blue-900 dark:text-blue-200">
-                        {t.emailMultiSender.gmailGuideDefaults || "Gmail 推荐配置"}
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <p><span className="text-muted-foreground">{t.emailMultiSender.gmailGuideHostLabel || "SMTP 主机"}：</span><span className="font-mono">smtp.gmail.com</span></p>
-                        <p><span className="text-muted-foreground">{t.emailMultiSender.gmailGuidePortLabel || "端口"}：</span><span className="font-mono">465</span></p>
-                        <p><span className="text-muted-foreground">{t.emailMultiSender.gmailGuideUserLabel || "用户名"}：</span><span className="font-mono">your@gmail.com</span></p>
-                        <p><span className="text-muted-foreground">{t.emailMultiSender.gmailGuidePassLabel || "密码"}：</span><span className="font-mono">{t.emailMultiSender.gmailGuidePassValue || "16位应用专用密码"}</span></p>
-                      </div>
-                    </div>
-
-                    <p className="text-[11px] text-blue-800/90 dark:text-blue-300/90">
-                      {t.emailMultiSender.gmailGuideHint || "若认证失败，请确认两步验证已开启，且填写的是应用专用密码。"}{" "}
-                      <a
-                        href="https://myaccount.google.com/apppasswords"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline underline-offset-2 hover:opacity-80"
-                      >
-                        {t.emailMultiSender.gmailGuideLinkText || "打开 Google 应用专用密码页面"}
-                      </a>
-                    </p>
-                 </div>
-                 ) : smtpGuideProvider === 'outlook' ? (
-                 <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-3">
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
-                        {language === 'zh' ? 'Outlook 配置教程（推荐 Microsoft 365）' : 'Outlook Setup Guide (Microsoft 365 Recommended)'}
-                      </h4>
-                      <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
-                        {language === 'zh' ? '使用 Outlook/Hotmail/企业 Microsoft 365 邮箱时，建议先配置 SMTP AUTH。' : 'For Outlook/Hotmail/Microsoft 365 mailboxes, enable SMTP AUTH first.'}
-                      </p>
-                    </div>
-
-                    <ol className="list-decimal pl-4 space-y-1 text-xs text-blue-800/90 dark:text-blue-300/90">
-                      <li>{language === 'zh' ? '确认账号允许 SMTP AUTH（组织管理员可在 M365 后台开启）。' : 'Ensure SMTP AUTH is enabled (M365 admin may need to allow it).'}</li>
-                      <li>{language === 'zh' ? '若账号开启了 MFA，请创建并使用应用专用密码。' : 'If MFA is enabled, create and use an app password.'}</li>
-                      <li>{language === 'zh' ? '点击 Outlook 预设自动填主机和端口。' : 'Click the Outlook preset to autofill host and port.'}</li>
-                      <li>{language === 'zh' ? '用户名填写完整邮箱地址。' : 'Use full email address as username.'}</li>
-                    </ol>
-
-                    <div className="rounded-md border border-blue-200/70 bg-white/80 p-3 dark:border-blue-900/60 dark:bg-slate-900/40">
-                      <p className="text-xs font-medium mb-2 text-blue-900 dark:text-blue-200">
-                        {language === 'zh' ? 'Outlook 推荐配置' : 'Outlook Recommended Settings'}
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <p><span className="text-muted-foreground">{language === 'zh' ? 'SMTP 主机' : 'SMTP Host'}：</span><span className="font-mono">smtp.office365.com</span></p>
-                        <p><span className="text-muted-foreground">{language === 'zh' ? '端口' : 'Port'}：</span><span className="font-mono">587</span></p>
-                        <p><span className="text-muted-foreground">{language === 'zh' ? '用户名' : 'Username'}：</span><span className="font-mono">your@outlook.com</span></p>
-                        <p><span className="text-muted-foreground">{language === 'zh' ? '密码' : 'Password'}：</span><span className="font-mono">{language === 'zh' ? '邮箱密码或应用专用密码' : 'Mailbox password or app password'}</span></p>
-                      </div>
-                    </div>
-
-                    <p className="text-[11px] text-blue-800/90 dark:text-blue-300/90">
-                      {language === 'zh'
-                        ? '如果出现超时或认证失败，请检查服务器出站 587 端口、防火墙策略，以及租户是否禁用 SMTP AUTH。'
-                        : 'If timeout/auth errors occur, check outbound 587 access, firewall policy, and SMTP AUTH policy in your tenant.'}
-                    </p>
-                 </div>
-                 ) : smtpGuideProvider === 'qq' ? (
-                 <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-3">
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
-                        {language === 'zh' ? 'QQ 邮箱配置教程（国内推荐）' : 'QQ Mail Setup Guide (CN Recommended)'}
-                      </h4>
-                      <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
-                        {language === 'zh' ? 'QQ 邮箱在国内网络可达性更稳定，建议优先用于国内部署。' : 'QQ Mail is usually more reachable in mainland China deployments.'}
-                      </p>
-                    </div>
-
-                    <ol className="list-decimal pl-4 space-y-1 text-xs text-blue-800/90 dark:text-blue-300/90">
-                      <li>{language === 'zh' ? '登录 QQ 邮箱设置，开启 SMTP 服务。' : 'Enable SMTP service in QQ Mail settings.'}</li>
-                      <li>{language === 'zh' ? '获取“授权码”（不是 QQ 登录密码）。' : 'Generate an authorization code (not your account password).'}</li>
-                      <li>{language === 'zh' ? '用户名填写完整 QQ 邮箱地址。' : 'Use full QQ mailbox address as username.'}</li>
-                      <li>{language === 'zh' ? '密码填写 SMTP 授权码。' : 'Use SMTP authorization code as password.'}</li>
-                    </ol>
-
-                    <div className="rounded-md border border-blue-200/70 bg-white/80 p-3 dark:border-blue-900/60 dark:bg-slate-900/40">
-                      <p className="text-xs font-medium mb-2 text-blue-900 dark:text-blue-200">
-                        {language === 'zh' ? 'QQ 邮箱推荐配置' : 'QQ Mail Recommended Settings'}
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <p><span className="text-muted-foreground">{language === 'zh' ? 'SMTP 主机' : 'SMTP Host'}：</span><span className="font-mono">smtp.qq.com</span></p>
-                        <p><span className="text-muted-foreground">{language === 'zh' ? '端口' : 'Port'}：</span><span className="font-mono">465</span></p>
-                        <p><span className="text-muted-foreground">{language === 'zh' ? '用户名' : 'Username'}：</span><span className="font-mono">your@qq.com</span></p>
-                        <p><span className="text-muted-foreground">{language === 'zh' ? '密码' : 'Password'}：</span><span className="font-mono">{language === 'zh' ? 'SMTP 授权码' : 'SMTP authorization code'}</span></p>
-                      </div>
-                    </div>
-                 </div>
-                 ) : smtpGuideProvider === '163' ? (
-                 <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-3">
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
-                        {language === 'zh' ? '163 邮箱配置教程（国内推荐）' : '163 Mail Setup Guide (CN Recommended)'}
-                      </h4>
-                      <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
-                        {language === 'zh' ? '163 邮箱同样适合国内网络环境。' : '163 Mail is also suitable for mainland China network conditions.'}
-                      </p>
-                    </div>
-
-                    <ol className="list-decimal pl-4 space-y-1 text-xs text-blue-800/90 dark:text-blue-300/90">
-                      <li>{language === 'zh' ? '进入 163 邮箱设置，开启 SMTP 服务。' : 'Enable SMTP service in 163 Mail settings.'}</li>
-                      <li>{language === 'zh' ? '生成客户端授权码。' : 'Generate client authorization code.'}</li>
-                      <li>{language === 'zh' ? '用户名填写完整 163 邮箱地址。' : 'Use full 163 mailbox address as username.'}</li>
-                      <li>{language === 'zh' ? '密码填写客户端授权码。' : 'Use client authorization code as password.'}</li>
-                    </ol>
-
-                    <div className="rounded-md border border-blue-200/70 bg-white/80 p-3 dark:border-blue-900/60 dark:bg-slate-900/40">
-                      <p className="text-xs font-medium mb-2 text-blue-900 dark:text-blue-200">
-                        {language === 'zh' ? '163 邮箱推荐配置' : '163 Mail Recommended Settings'}
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <p><span className="text-muted-foreground">{language === 'zh' ? 'SMTP 主机' : 'SMTP Host'}：</span><span className="font-mono">smtp.163.com</span></p>
-                        <p><span className="text-muted-foreground">{language === 'zh' ? '端口' : 'Port'}：</span><span className="font-mono">465</span></p>
-                        <p><span className="text-muted-foreground">{language === 'zh' ? '用户名' : 'Username'}：</span><span className="font-mono">your@163.com</span></p>
-                        <p><span className="text-muted-foreground">{language === 'zh' ? '密码' : 'Password'}：</span><span className="font-mono">{language === 'zh' ? 'SMTP 授权码' : 'SMTP authorization code'}</span></p>
-                      </div>
-                    </div>
-                 </div>
-                 ) : (
-                 <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-3">
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
-                        {language === 'zh' ? 'Sina 邮箱配置教程（国内可用）' : 'Sina Mail Setup Guide (CN Available)'}
-                      </h4>
-                      <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
-                        {language === 'zh' ? 'Sina 邮箱也可用于国内部署场景。' : 'Sina Mail can also be used in mainland China deployment scenarios.'}
-                      </p>
-                    </div>
-
-                    <ol className="list-decimal pl-4 space-y-1 text-xs text-blue-800/90 dark:text-blue-300/90">
-                      <li>{language === 'zh' ? '进入 Sina 邮箱设置，开启 SMTP 服务。' : 'Enable SMTP service in Sina Mail settings.'}</li>
-                      <li>{language === 'zh' ? '生成邮箱客户端授权码。' : 'Generate mail client authorization code.'}</li>
-                      <li>{language === 'zh' ? '用户名填写完整 Sina 邮箱地址。' : 'Use full Sina mailbox address as username.'}</li>
-                      <li>{language === 'zh' ? '密码填写授权码（不是登录密码）。' : 'Use authorization code as password (not login password).'}</li>
-                    </ol>
-
-                    <div className="rounded-md border border-blue-200/70 bg-white/80 p-3 dark:border-blue-900/60 dark:bg-slate-900/40">
-                      <p className="text-xs font-medium mb-2 text-blue-900 dark:text-blue-200">
-                        {language === 'zh' ? 'Sina 邮箱推荐配置' : 'Sina Mail Recommended Settings'}
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                        <p><span className="text-muted-foreground">{language === 'zh' ? 'SMTP 主机' : 'SMTP Host'}：</span><span className="font-mono">smtp.sina.com</span></p>
-                        <p><span className="text-muted-foreground">{language === 'zh' ? '端口' : 'Port'}：</span><span className="font-mono">465</span></p>
-                        <p><span className="text-muted-foreground">{language === 'zh' ? '用户名' : 'Username'}：</span><span className="font-mono">your@sina.com</span></p>
-                        <p><span className="text-muted-foreground">{language === 'zh' ? '密码' : 'Password'}：</span><span className="font-mono">{language === 'zh' ? 'SMTP 授权码' : 'SMTP authorization code'}</span></p>
-                      </div>
-                    </div>
-                 </div>
-                 )}
+                   <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-2">
+                     <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                       {smtpGuideProvider === 'gmail' ? (t.emailMultiSender.gmailGuideTitle || "Gmail Setup Guide")
+                        : smtpGuideProvider === 'outlook' ? (language === 'zh' ? 'Outlook 配置教程' : 'Outlook Setup Guide')
+                        : smtpGuideProvider === 'qq' ? (language === 'zh' ? 'QQ 邮箱配置教程' : 'QQ Mail Setup Guide')
+                        : smtpGuideProvider === '163' ? (language === 'zh' ? '163 邮箱配置教程' : '163 Mail Setup Guide')
+                        : (language === 'zh' ? 'Sina 邮箱配置教程' : 'Sina Mail Setup Guide')}
+                     </h4>
+                     <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
+                       {language === 'zh' ? '点击下方预设按钮自动填入主机和端口，再填写邮箱和授权码/应用密码即可。' : 'Click the preset button below to auto-fill host and port, then enter your email and authorization code/app password.'}
+                     </p>
+                   </div>
                  </div>
 
                  {/* Quick Presets */}
@@ -1029,63 +1082,31 @@ Best regards,
                     <div className="space-y-4">
                         <div className="space-y-2">
                           <Label>{t.emailMultiSender.smtpHost}</Label>
-                          <Input 
-                            placeholder="smtp.example.com" 
-                            value={smtpConfig.host}
-                            onChange={(e) => setSmtpConfig({...smtpConfig, host: e.target.value})}
-                          />
+                          <Input placeholder="smtp.example.com" value={smtpConfig.host} onChange={(e) => setSmtpConfig({...smtpConfig, host: e.target.value})} />
                         </div>
                         <div className="space-y-2">
                           <Label>{t.emailMultiSender.smtpPort}</Label>
-                          <Input 
-                            placeholder="465" 
-                            value={smtpConfig.port}
-                            onChange={(e) => setSmtpConfig({...smtpConfig, port: e.target.value})}
-                          />
+                          <Input placeholder="465" value={smtpConfig.port} onChange={(e) => setSmtpConfig({...smtpConfig, port: e.target.value})} />
                         </div>
                     </div>
                     <div className="space-y-4">
                         <div className="space-y-2">
                           <Label>{language === 'zh' ? '发件人名称（可选）' : 'Sender Name (optional)'}</Label>
-                          <Input
-                            placeholder={language === 'zh' ? '例如：张三 / 品牌名' : 'e.g. Your Name / Brand'}
-                            value={senderName}
-                            onChange={(e) => setSenderName(e.target.value)}
-                          />
+                          <Input placeholder={language === 'zh' ? '例如：张三 / 品牌名' : 'e.g. Your Name / Brand'} value={senderName} onChange={(e) => setSenderName(e.target.value)} />
                         </div>
                         <div className="space-y-2">
                           <Label>{t.emailMultiSender.smtpUser}</Label>
-                          <Input 
-                            placeholder="your-email@example.com" 
-                            value={smtpConfig.user}
-                            onChange={(e) => setSmtpConfig({...smtpConfig, user: e.target.value})}
-                          />
+                          <Input placeholder="your-email@example.com" value={smtpConfig.user} onChange={(e) => setSmtpConfig({...smtpConfig, user: e.target.value})} />
                         </div>
                         <div className="space-y-2">
                           <Label>{t.emailMultiSender.smtpPass}</Label>
-                          <div className="relative">
-                            <Input 
-                              type="password"
-                              placeholder={t.emailMultiSender.smtpHint || "App Password"} 
-                              value={smtpConfig.pass}
-                              onChange={(e) => setSmtpConfig({...smtpConfig, pass: e.target.value})}
-                            />
-                          </div>
-                   
+                          <Input type="password" placeholder={t.emailMultiSender.smtpHint || "App Password"} value={smtpConfig.pass} onChange={(e) => setSmtpConfig({...smtpConfig, pass: e.target.value})} />
                         </div>
                     </div>
                  </div>
                  <div className="text-[12px] text-muted-foreground bg-blue-50 dark:bg-blue-900/20 p-3 rounded text-blue-700 dark:text-blue-300 flex gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <span>{t.emailMultiSender.smtpHint}</span>
-                 </div>
-                 <div className="text-[12px] bg-amber-50 dark:bg-amber-900/20 p-3 rounded text-amber-700 dark:text-amber-300 flex gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>
-                      {language === 'zh'
-                        ? '提示：国内网络环境下，Gmail/Outlook 等海外邮箱 SMTP 可能不可达或不稳定。建议优先使用 QQ、163、Sina 邮箱或企业邮箱。'
-                        : 'Tip: In mainland China network environments, overseas SMTP providers like Gmail/Outlook may be unreachable or unstable. Prefer QQ/163/Sina Mail or local enterprise mail.'}
-                    </span>
                  </div>
               </CardContent>
             </Card>
@@ -1101,6 +1122,43 @@ Best regards,
                 <CardDescription>{t.emailMultiSender.chooseTemplate}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* User saved templates section */}
+                {user?.id && (
+                  <div className="space-y-3 p-4 border rounded-lg bg-muted/20">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold flex items-center gap-2">
+                        <Save className="w-4 h-4" />
+                        {t.emailMultiSender.savedTemplates}
+                      </h3>
+                      <Button variant="ghost" size="sm" onClick={loadUserTemplates} disabled={isLoadingTemplates}>
+                        <RefreshCw className={`w-3 h-3 mr-1 ${isLoadingTemplates ? 'animate-spin' : ''}`} />
+                      </Button>
+                    </div>
+                    {userTemplates.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">{t.emailMultiSender.noSavedTemplates}</p>
+                    ) : (
+                      <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                        {userTemplates.map((tmpl) => (
+                          <div key={tmpl.id} className="flex items-center justify-between p-2 rounded border bg-background hover:bg-muted/40 group transition-colors">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{tmpl.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">{tmpl.subject || (language === 'zh' ? '无主题' : 'No subject')}</p>
+                            </div>
+                            <div className="flex items-center gap-1 pl-2">
+                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleLoadUserTemplate(tmpl)}>
+                                {t.emailMultiSender.loadTemplate}
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-red-500" onClick={() => handleDeleteTemplate(tmpl.id)}>
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
                     <SelectTrigger>
@@ -1145,6 +1203,33 @@ Best regards,
                             className="min-h-[300px] font-mono text-sm leading-relaxed"
                         />
                       </div>
+                      {/* Save as template button */}
+                      {user?.id && (
+                        <div className="border-t pt-3 space-y-2">
+                          {showSaveTemplate ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                placeholder={t.emailMultiSender.templateNamePlaceholder}
+                                value={newTemplateName}
+                                onChange={(e) => setNewTemplateName(e.target.value)}
+                                className="h-8"
+                              />
+                              <Button size="sm" onClick={handleSaveTemplate} disabled={!newTemplateName.trim()}>
+                                <Save className="w-3 h-3 mr-1" />
+                                {t.emailMultiSender.saveTemplate}
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setShowSaveTemplate(false)}>
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button size="sm" variant="outline" onClick={() => setShowSaveTemplate(true)} disabled={!customSubject && !customContent}>
+                              <Save className="w-3 h-3 mr-1" />
+                              {t.emailMultiSender.saveAsTemplate}
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </>
                 ) : selectedTemplate ? (
                     <div className="space-y-4 border rounded-lg p-4 bg-muted/20">
@@ -1195,13 +1280,7 @@ Best regards,
                             <p className="truncate text-sm font-medium">{file.name}</p>
                             <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
                           </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveAttachment(index)}
-                            disabled={isSending}
-                          >
+                          <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveAttachment(index)} disabled={isSending}>
                             <X className="w-4 h-4" />
                           </Button>
                         </div>
@@ -1240,21 +1319,11 @@ Best regards,
                     <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg animate-in fade-in slide-in-from-top-2">
                       <div className="space-y-2">
                         <Label htmlFor="schedule-date">{t.emailMultiSender.date}</Label>
-                        <Input
-                            id="schedule-date"
-                            type="date"
-                            value={scheduleDate}
-                            onChange={(e) => setScheduleDate(e.target.value)}
-                        />
+                        <Input id="schedule-date" type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="schedule-time">{t.emailMultiSender.time}</Label>
-                        <Input
-                            id="schedule-time"
-                            type="time"
-                            value={scheduleTime}
-                            onChange={(e) => setScheduleTime(e.target.value)}
-                        />
+                        <Input id="schedule-time" type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} />
                       </div>
                     </div>
                 )}
@@ -1268,9 +1337,9 @@ Best regards,
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="slow">{t.emailMultiSender.slowRate} (5s delay)</SelectItem>
-                            <SelectItem value="normal">{t.emailMultiSender.normalRate} (2s delay)</SelectItem>
-                            <SelectItem value="fast">{t.emailMultiSender.fastRate} (1s delay)</SelectItem>
+                            <SelectItem value="slow">{t.emailMultiSender.slowRate} (3-7s)</SelectItem>
+                            <SelectItem value="normal">{t.emailMultiSender.normalRate} (1.5-3s)</SelectItem>
+                            <SelectItem value="fast">{t.emailMultiSender.fastRate} (0.8-1.5s)</SelectItem>
                         </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">{t.emailMultiSender.avoidSpam}</p>
@@ -1278,6 +1347,170 @@ Best regards,
                   </div>
                 </div>
 
+                {/* Tracking info */}
+                <div className="p-4 border rounded-lg bg-green-50 dark:bg-green-900/20 flex items-start gap-3">
+                  <Eye className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-green-800 dark:text-green-300">{t.emailMultiSender.trackingEnabled}</p>
+                    <p className="text-xs text-green-700 dark:text-green-400 mt-1">{t.emailMultiSender.trackingPixelNote}</p>
+                  </div>
+                </div>
+
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Send History Tab */}
+          <TabsContent value="history" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="w-5 h-5" />
+                  {selectedTaskId ? t.emailMultiSender.sendResults : t.emailMultiSender.sendHistory}
+                </CardTitle>
+                {selectedTaskId && (
+                  <Button variant="ghost" size="sm" onClick={() => { setSelectedTaskId(null); setTaskDetails([]) }} className="w-fit">
+                    <ArrowLeft className="w-4 h-4 mr-1" /> {t.emailMultiSender.backToList}
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent>
+                {!user?.id ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <History className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                    <p>{t.emailMultiSender.loginRequiredForHistory}</p>
+                  </div>
+                ) : selectedTaskId && taskDetails.length > 0 ? (
+                  /* Task detail view */
+                  <div className="space-y-4">
+                    {/* Stats bar */}
+                    {taskStats && (
+                      <div className="grid grid-cols-4 gap-3">
+                        <div className="bg-muted/40 p-3 rounded-lg text-center">
+                          <span className="block text-xl font-bold">{taskStats.total}</span>
+                          <span className="text-xs text-muted-foreground">{t.emailMultiSender.totalEmails}</span>
+                        </div>
+                        <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg text-center">
+                          <span className="block text-xl font-bold text-green-600">{taskStats.sent}</span>
+                          <span className="text-xs text-green-600">{t.emailMultiSender.sentSuccess}</span>
+                        </div>
+                        <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg text-center">
+                          <span className="block text-xl font-bold text-red-500">{taskStats.failed}</span>
+                          <span className="text-xs text-red-500">{t.emailMultiSender.sentFailed}</span>
+                        </div>
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-center">
+                          <span className="block text-xl font-bold text-blue-600">{taskStats.opened}</span>
+                          <span className="text-xs text-blue-600">{t.emailMultiSender.opened}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Success rate bar */}
+                    {taskStats && (
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span>{t.emailMultiSender.successRate}</span>
+                          <span className="font-semibold">{taskStats.successRate}%</span>
+                        </div>
+                        <Progress value={taskStats.successRate} className="h-2" />
+                      </div>
+                    )}
+
+                    {/* Export button */}
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="outline" onClick={() => loadTaskDetails(selectedTaskId)}>
+                        <RefreshCw className="w-3 h-3 mr-1" /> {t.emailMultiSender.refreshTracking}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => exportResults(taskDetails)}>
+                        <Download className="w-3 h-3 mr-1" /> {t.emailMultiSender.exportResults}
+                      </Button>
+                    </div>
+
+                    {/* Detail list */}
+                    <div className="max-h-[500px] overflow-y-auto space-y-2">
+                      {taskDetails.map((log) => (
+                        <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium truncate">{log.recipient_email}</p>
+                              {log.recipient_name && <span className="text-xs text-muted-foreground">({log.recipient_name})</span>}
+                            </div>
+                            {log.error_message && (
+                              <p className="text-xs text-red-500 mt-1 truncate flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3 shrink-0" /> {log.error_message}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 pl-3 shrink-0">
+                            {log.status === 'sent' ? (
+                              <Badge className="bg-green-500 hover:bg-green-600 text-white">
+                                <CheckCircle className="w-3 h-3 mr-1" />
+                                {t.emailMultiSender.sentSuccess}
+                              </Badge>
+                            ) : (
+                              <Badge variant="destructive">
+                                <AlertCircle className="w-3 h-3 mr-1" />
+                                {t.emailMultiSender.sentFailed}
+                              </Badge>
+                            )}
+                            {log.open_count > 0 ? (
+                              <Badge variant="outline" className="text-blue-600 border-blue-300">
+                                <MailOpen className="w-3 h-3 mr-1" />
+                                {log.open_count}
+                              </Badge>
+                            ) : log.status === 'sent' ? (
+                              <Badge variant="outline" className="text-muted-foreground">
+                                <MailX className="w-3 h-3 mr-1" />
+                                {t.emailMultiSender.notOpened}
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  /* Task list view */
+                  <div className="space-y-3">
+                    {isLoadingHistory ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <RefreshCw className="w-6 h-6 mx-auto mb-2 animate-spin" />
+                        <p className="text-sm">Loading...</p>
+                      </div>
+                    ) : sendTasks.length === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <Mail className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                        <p>{t.emailMultiSender.noSendHistory}</p>
+                      </div>
+                    ) : (
+                      sendTasks.map((task) => (
+                        <div
+                          key={task.taskId}
+                          className="p-4 border rounded-lg hover:bg-muted/30 cursor-pointer transition-colors"
+                          onClick={() => loadTaskDetails(task.taskId)}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-sm font-medium truncate flex-1">{task.subject || (language === 'zh' ? '无主题' : 'No subject')}</p>
+                            <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                              {new Date(task.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs">
+                            <span className="text-muted-foreground">{t.emailMultiSender.totalEmails}: {task.total}</span>
+                            <span className="text-green-600">✓ {task.sent}</span>
+                            {task.failed > 0 && <span className="text-red-500">✗ {task.failed}</span>}
+                            {task.opened > 0 && (
+                              <span className="text-blue-600 flex items-center gap-1">
+                                <Eye className="w-3 h-3" /> {task.opened}
+                              </span>
+                            )}
+                            <span className="text-muted-foreground ml-auto">{t.emailMultiSender.successRate}: {task.total > 0 ? Math.round((task.sent / task.total) * 100) : 0}%</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1340,6 +1573,15 @@ Best regards,
                         {t.emailMultiSender.smtpConfigLabel || "SMTP Config"}
                      </span>
                      <span className="text-muted-foreground">{isConfigValid ? (t.emailMultiSender.ready || 'Ready') : (t.emailMultiSender.missing || 'Missing')}</span>
+                  </div>
+
+                  {/* Tracking indicator */}
+                  <div className="flex items-center justify-between text-sm">
+                     <span className="flex items-center gap-2">
+                        <Eye className="w-4 h-4 text-blue-500" />
+                        {t.emailMultiSender.trackingEnabled}
+                     </span>
+                     <Badge variant="outline" className="text-[10px] text-blue-600 border-blue-300">ON</Badge>
                   </div>
                </div>
 
