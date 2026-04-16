@@ -196,20 +196,24 @@ export async function POST(req: Request) {
 
       // 记录失败日志
       if (requestUserId && taskId) {
-        await supabaseAdmin
-          .from('email_send_logs')
-          .insert({
-            user_id: requestUserId,
-            task_id: taskId,
-            recipient_email: mailOptions.to,
-            recipient_name: mailOptions.recipientName || null,
-            subject: mailOptions.subject,
-            status: 'failed',
-            error_message: verifyError.message,
-            smtp_host: smtpConfig.host,
-            tracking_id: trackingId,
-          })
-          .catch((e: any) => console.error('[email-sender] log insert error:', e))
+        try {
+          const { error: logErr } = await supabaseAdmin
+            .from('email_send_logs')
+            .insert({
+              user_id: requestUserId,
+              task_id: taskId,
+              recipient_email: mailOptions.to,
+              recipient_name: mailOptions.recipientName || null,
+              subject: mailOptions.subject,
+              status: 'failed',
+              error_message: verifyError.message,
+              smtp_host: smtpConfig.host,
+              tracking_id: trackingId,
+            })
+          if (logErr) console.error('[email-sender] log insert error:', logErr)
+        } catch (e) {
+          console.error('[email-sender] log insert crash:', e)
+        }
       }
 
       return NextResponse.json(
@@ -231,20 +235,24 @@ export async function POST(req: Request) {
 
     // 记录成功日志
     if (requestUserId && taskId) {
-      await supabaseAdmin
-        .from('email_send_logs')
-        .insert({
-          user_id: requestUserId,
-          task_id: taskId,
-          recipient_email: mailOptions.to,
-          recipient_name: mailOptions.recipientName || null,
-          subject: mailOptions.subject,
-          status: 'sent',
-          smtp_host: smtpConfig.host,
-          message_id: info.messageId,
-          tracking_id: trackingId,
-        })
-        .catch((e: any) => console.error('[email-sender] log insert error:', e))
+      try {
+        const { error: logErr } = await supabaseAdmin
+          .from('email_send_logs')
+          .insert({
+            user_id: requestUserId,
+            task_id: taskId,
+            recipient_email: mailOptions.to,
+            recipient_name: mailOptions.recipientName || null,
+            subject: mailOptions.subject,
+            status: 'sent',
+            smtp_host: smtpConfig.host,
+            message_id: info.messageId,
+            tracking_id: trackingId,
+          })
+        if (logErr) console.error('[email-sender] log insert error:', logErr)
+      } catch (e) {
+        console.error('[email-sender] log insert crash:', e)
+      }
     }
 
     if (requestUserId) {
