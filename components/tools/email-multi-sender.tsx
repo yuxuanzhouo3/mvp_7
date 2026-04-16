@@ -1331,9 +1331,9 @@ Best regards,
                 <div className="space-y-4 p-4 border rounded-lg bg-muted/10">
                   <div className="space-y-2">
                     <Label className="text-base">{t.emailMultiSender.sendingRate}</Label>
-                    <div className="flex items-center gap-4">
+                    <div className="space-y-2">
                         <Select defaultValue="normal" value={sendingRate} onValueChange={setSendingRate}>
-                        <SelectTrigger className="w-[200px]">
+                        <SelectTrigger className="w-full max-w-[320px]">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
