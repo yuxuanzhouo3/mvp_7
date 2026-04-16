@@ -224,8 +224,8 @@ export async function POST(req: Request) {
             : 'SMTP_AUTH_OR_CONFIG_ERROR',
           error: `SMTP Connection Failed: ${verifyError.message}`,
           userMessage: isConnectionTimeoutError(verifyError)
-            ? 'SMTP 服务器网络不可达或端口被拦截，请检查当前端口出站连接。'
-            : 'SMTP 认证或配置有误，请检查主机、端口、用户名和应用专用密码。',
+            ? 'SMTP server is unreachable or the port is blocked. Please check outbound connection for the current port.'
+            : 'SMTP authentication or configuration error. Please check host, port, username, and app password.',
         },
         { status: 401 }
       )

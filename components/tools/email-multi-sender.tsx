@@ -273,7 +273,7 @@ export function EmailMultiSender() {
       if (file.size > MAX_ATTACHMENT_SIZE) {
         toast.error(
           t.emailMultiSender.attachmentTooLarge ||
-            (language === 'zh' ? `附件 ${file.name} 超过 10MB 限制` : `Attachment ${file.name} exceeds 10MB`) 
+            `Attachment ${file.name} exceeds 10MB` 
         )
         continue
       }
@@ -281,7 +281,7 @@ export function EmailMultiSender() {
       if (merged.length >= MAX_ATTACHMENT_COUNT) {
         toast.error(
           t.emailMultiSender.attachmentCountExceeded ||
-            (language === 'zh' ? '附件最多 5 个' : 'Maximum 5 attachments')
+            ('Maximum 5 attachments')
         )
         break
       }
@@ -290,7 +290,7 @@ export function EmailMultiSender() {
       if (nextTotal > MAX_TOTAL_ATTACHMENT_SIZE) {
         toast.error(
           t.emailMultiSender.attachmentTotalTooLarge ||
-            (language === 'zh' ? '附件总大小不能超过 20MB' : 'Total attachment size cannot exceed 20MB')
+            ('Total attachment size cannot exceed 20MB')
         )
         continue
       }
@@ -348,7 +348,7 @@ export function EmailMultiSender() {
   const handleParseRawInput = () => {
     const input = rawRecipientsInput.trim()
     if (!input) {
-      toast.error(language === "zh" ? "请先粘贴文本内容" : "Please paste text content first")
+      toast.error("Please paste text content first")
       return
     }
 
@@ -357,7 +357,7 @@ export function EmailMultiSender() {
     if (parsedRecipients.length === 0) {
       toast.error(
         t.emailMultiSender.noEmailFound ||
-          (language === "zh" ? "未识别到邮箱地址，请检查输入内容" : "No email addresses were detected")
+          ("No email addresses were detected")
       )
       return
     }
@@ -365,7 +365,7 @@ export function EmailMultiSender() {
     setRecipients((current) => mergeRecipientLists(current, parsedRecipients))
     toast.success(
       formatWithCount(
-        t.emailMultiSender.parsedEmailCount || (language === "zh" ? "已解析 {count} 个邮箱" : "Parsed {count} emails"),
+        t.emailMultiSender.parsedEmailCount || ("Parsed {count} emails"),
         parsedRecipients.length
       )
     )
@@ -650,7 +650,7 @@ Best regards,
       if (parsedRecipients.length === 0) {
         toast.error(
           t.emailMultiSender.noEmailFound ||
-          (language === "zh" ? "未识别到邮箱地址，请检查文件内容" : "No email addresses were detected")
+          ("No email addresses were detected")
         )
         return
       }
@@ -658,7 +658,7 @@ Best regards,
       setRecipients((current) => mergeRecipientLists(current, parsedRecipients))
       toast.success(
         formatWithCount(
-          t.emailMultiSender.parsedEmailCount || (language === "zh" ? "已解析 {count} 个邮箱" : "Parsed {count} emails"),
+          t.emailMultiSender.parsedEmailCount || ("Parsed {count} emails"),
           parsedRecipients.length
         )
       )
@@ -666,7 +666,7 @@ Best regards,
       console.error("[email-multi-sender] parse upload failed:", error)
       toast.error(
         t.emailMultiSender.fileReadFailed ||
-        (language === "zh" ? "读取文件失败，请重试" : "Failed to read the uploaded file")
+        ("Failed to read the uploaded file")
       )
     } finally {
       input.value = ""
@@ -772,9 +772,7 @@ Best regards,
              (result.error.includes('ETIMEDOUT') ||
                result.error.includes('ESOCKET') ||
                result.error.includes('CONN'))
-               ? (language === 'zh'
-                   ? 'SMTP 网络不可达或端口被拦截，请检查服务器防火墙和当前端口出站策略。'
-                   : 'SMTP network is unreachable or blocked. Please check firewall and outbound policy for the current port.')
+               ? 'SMTP network is unreachable or blocked. Please check firewall and outbound policy for the current port.'
                : result.error)
 
            newRecipients[i].error = friendlyError
@@ -782,10 +780,7 @@ Best regards,
          }
        } catch (error: any) {
           newRecipients[i].status = 'failed'
-          newRecipients[i].error =
-            language === 'zh'
-              ? `发送失败：${error.message}`
-              : `Send failed: ${error.message}`
+          newRecipients[i].error = `Send failed: ${error.message}`
           failedCount++
        }
 
@@ -936,26 +931,24 @@ Best regards,
                     </h3>
                     <div className="space-y-2">
                       <Label className="text-xs text-muted-foreground">
-                        {language === "zh" ? "粘贴任意文本智能解析邮箱" : "Paste any text to auto-parse emails"}
+                        {"Paste any text to auto-parse emails"}
                       </Label>
                       <Textarea
                         placeholder={
-                          language === "zh"
-                            ? "可直接粘贴聊天记录、表格、签名等，系统会自动提取邮箱"
-                            : "Paste chat logs, tables, signatures, etc. Emails will be extracted automatically"
+                          "Paste chat logs, tables, signatures, etc. Emails will be extracted automatically"
                         }
                         value={rawRecipientsInput}
                         onChange={(e) => setRawRecipientsInput(e.target.value)}
                         className="min-h-[100px]"
                       />
                       <Button onClick={handleParseRawInput} variant="secondary" size="sm" className="w-full">
-                        {language === "zh" ? "解析文本并添加" : "Parse text and add"}
+                        {"Parse text and add"}
                       </Button>
                     </div>
 
                     <div className="border-t pt-3 space-y-2">
                       <Label className="text-xs text-muted-foreground">
-                        {language === "zh" ? "手动单个添加" : "Add single recipient"}
+                        {"Add single recipient"}
                       </Label>
                     </div>
                     <div className="space-y-2">
@@ -1036,7 +1029,7 @@ Best regards,
                  <div className="space-y-3">
                    <div className="flex items-center justify-between gap-3">
                      <Label className="text-xs uppercase text-muted-foreground font-semibold tracking-wider">
-                       {language === 'zh' ? 'SMTP 配置教程' : 'SMTP Setup Guide'}
+                       {'SMTP Setup Guide'}
                      </Label>
                      <Select value={smtpGuideProvider} onValueChange={(value) => setSmtpGuideProvider(value as any)}>
                        <SelectTrigger className="w-[180px] h-8">
@@ -1055,13 +1048,13 @@ Best regards,
                    <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-2">
                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
                        {smtpGuideProvider === 'gmail' ? (t.emailMultiSender.gmailGuideTitle || "Gmail Setup Guide")
-                        : smtpGuideProvider === 'outlook' ? (language === 'zh' ? 'Outlook 配置教程' : 'Outlook Setup Guide')
-                        : smtpGuideProvider === 'qq' ? (language === 'zh' ? 'QQ 邮箱配置教程' : 'QQ Mail Setup Guide')
-                        : smtpGuideProvider === '163' ? (language === 'zh' ? '163 邮箱配置教程' : '163 Mail Setup Guide')
-                        : (language === 'zh' ? 'Sina 邮箱配置教程' : 'Sina Mail Setup Guide')}
+                        : smtpGuideProvider === 'outlook' ? ('Outlook Setup Guide')
+                        : smtpGuideProvider === 'qq' ? ('QQ Mail Setup Guide')
+                        : smtpGuideProvider === '163' ? ('163 Mail Setup Guide')
+                        : ('Sina Mail Setup Guide')}
                      </h4>
                      <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
-                       {language === 'zh' ? '点击下方预设按钮自动填入主机和端口，再填写邮箱和授权码/应用密码即可。' : 'Click the preset button below to auto-fill host and port, then enter your email and authorization code/app password.'}
+                       {'Click the preset button below to auto-fill host and port, then enter your email and authorization code/app password.'}
                      </p>
                    </div>
                  </div>
@@ -1091,8 +1084,8 @@ Best regards,
                     </div>
                     <div className="space-y-4">
                         <div className="space-y-2">
-                          <Label>{language === 'zh' ? '发件人名称（可选）' : 'Sender Name (optional)'}</Label>
-                          <Input placeholder={language === 'zh' ? '例如：张三 / 品牌名' : 'e.g. Your Name / Brand'} value={senderName} onChange={(e) => setSenderName(e.target.value)} />
+                          <Label>{'Sender Name (optional)'}</Label>
+                          <Input placeholder={'e.g. Your Name / Brand'} value={senderName} onChange={(e) => setSenderName(e.target.value)} />
                         </div>
                         <div className="space-y-2">
                           <Label>{t.emailMultiSender.smtpUser}</Label>
@@ -1142,7 +1135,7 @@ Best regards,
                           <div key={tmpl.id} className="flex items-center justify-between p-2 rounded border bg-background hover:bg-muted/40 group transition-colors">
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate">{tmpl.name}</p>
-                              <p className="text-xs text-muted-foreground truncate">{tmpl.subject || (language === 'zh' ? '无主题' : 'No subject')}</p>
+                              <p className="text-xs text-muted-foreground truncate">{tmpl.subject || ('No subject')}</p>
                             </div>
                             <div className="flex items-center gap-1 pl-2">
                               <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleLoadUserTemplate(tmpl)}>
@@ -1490,7 +1483,7 @@ Best regards,
                           onClick={() => loadTaskDetails(task.taskId)}
                         >
                           <div className="flex items-center justify-between mb-2">
-                            <p className="text-sm font-medium truncate flex-1">{task.subject || (language === 'zh' ? '无主题' : 'No subject')}</p>
+                            <p className="text-sm font-medium truncate flex-1">{task.subject || ('No subject')}</p>
                             <span className="text-xs text-muted-foreground shrink-0 ml-2">
                               {new Date(task.createdAt).toLocaleString()}
                             </span>
