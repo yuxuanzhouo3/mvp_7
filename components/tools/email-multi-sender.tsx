@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
-import { Upload, Mail, Users, FileText, Send, Clock, CheckCircle, AlertCircle, Eye, Settings, Plus, Trash2, X, Save, History, RefreshCw, ArrowLeft, Download, MailOpen, MailX } from "lucide-react"
+import { Upload, Mail, Users, FileText, Send, Clock, CheckCircle, AlertCircle, Eye, Settings, Plus, Trash2, X, Save, History, RefreshCw, ArrowLeft, Download, MailOpen, MailX, FolderPlus, Database } from "lucide-react"
 import { toast } from "sonner"
 import { emitToolSuccess } from "@/lib/credits/tool-success"
 
@@ -44,11 +44,29 @@ interface Recipient {
   error?: string
 }
 
+interface RecipientGroup {
+  id: number
+  name: string
+  recipients: Recipient[]
+  created_at: string
+}
+
 interface SmtpConfig {
   host: string
   port: string
   user: string
   pass: string
+}
+
+interface SavedSmtpConfig {
+  id: number
+  name: string
+  host: string
+  port: string
+  username: string
+  pass: string
+  sender_name: string
+  created_at: string
 }
 
 interface SendTask {
@@ -89,6 +107,7 @@ export function EmailMultiSender() {
     (template || "{count}").replace("{count}", String(count))
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string>("")
+  const [loadedUserTemplateName, setLoadedUserTemplateName] = useState<string>("")
   const [customSubject, setCustomSubject] = useState("")
   const [customContent, setCustomContent] = useState("")
   const [isScheduled, setIsScheduled] = useState(false)
@@ -129,10 +148,24 @@ export function EmailMultiSender() {
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
   const [activeMainTab, setActiveMainTab] = useState("recipients")
 
-  // Load user templates on mount
+  // Recipient groups state
+  const [recipientGroups, setRecipientGroups] = useState<RecipientGroup[]>([])
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false)
+  const [showSaveGroup, setShowSaveGroup] = useState(false)
+  const [newGroupName, setNewGroupName] = useState("")
+
+  // Saved SMTP configs state
+  const [savedSmtpConfigs, setSavedSmtpConfigs] = useState<SavedSmtpConfig[]>([])
+  const [isLoadingSmtpConfigs, setIsLoadingSmtpConfigs] = useState(false)
+  const [showSaveSmtpConfig, setShowSaveSmtpConfig] = useState(false)
+  const [newSmtpConfigName, setNewSmtpConfigName] = useState("")
+
+  // Load user templates, groups, and smtp configs on mount
   useEffect(() => {
     if (user?.id) {
       loadUserTemplates()
+      loadRecipientGroups()
+      loadSavedSmtpConfigs()
     }
   }, [user?.id])
 
@@ -176,11 +209,20 @@ export function EmailMultiSender() {
       const data = await res.json()
       if (data.success) {
         toast.success(t.emailMultiSender.templateSaved)
+        // Optimistic update: immediately add to local state
+        if (data.template) {
+          setUserTemplates(prev => [data.template, ...prev])
+        } else {
+          // fallback: reload from server
+          loadUserTemplates()
+        }
         setNewTemplateName("")
         setShowSaveTemplate(false)
-        loadUserTemplates()
+      } else {
+        toast.error(data.error || 'Failed to save template')
       }
     } catch (e: any) {
+      console.error('[email-templates] save error:', e)
       toast.error(e.message)
     }
   }
@@ -206,7 +248,213 @@ export function EmailMultiSender() {
     setSelectedTemplate('custom')
     setCustomSubject(tmpl.subject)
     setCustomContent(tmpl.content)
+    setLoadedUserTemplateName(tmpl.name)
     toast.success(t.emailMultiSender.templateLoaded)
+  }
+
+  // ====== Recipient Groups Functions ======
+  const loadRecipientGroups = async () => {
+    if (!user?.id) return
+    setIsLoadingGroups(true)
+    try {
+      const res = await fetch('/api/tools/email-sender/groups', {
+        headers: { 'x-user-id': String(user.id) },
+      })
+      const data = await res.json()
+      if (data.success) {
+        setRecipientGroups(data.groups || [])
+      }
+    } catch (e) {
+      console.error('[email-groups] load error:', e)
+    } finally {
+      setIsLoadingGroups(false)
+    }
+  }
+
+  const handleSaveGroup = async () => {
+    if (!user?.id) {
+      toast.error(t.emailMultiSender.loginRequiredForTemplates)
+      return
+    }
+    if (!newGroupName.trim()) return
+    if (recipients.length === 0) {
+      toast.error(language === 'zh' ? '当前没有收件人可保存' : 'No recipients to save')
+      return
+    }
+    try {
+      const res = await fetch('/api/tools/email-sender/groups', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': String(user.id),
+        },
+        body: JSON.stringify({
+          name: newGroupName.trim(),
+          recipients: recipients.map(r => ({
+            email: r.email,
+            name: r.name,
+            company: r.company,
+            position: r.position,
+          })),
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(language === 'zh' ? '分组已保存' : 'Group saved')
+        if (data.group) {
+          setRecipientGroups(prev => [data.group, ...prev])
+        } else {
+          loadRecipientGroups()
+        }
+        setNewGroupName("")
+        setShowSaveGroup(false)
+      } else {
+        toast.error(data.error || 'Failed to save group')
+      }
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }
+
+  const handleLoadGroup = (group: RecipientGroup) => {
+    const groupRecipients = (group.recipients || []).map((r: any) => ({
+      email: r.email,
+      name: r.name || r.email.split('@')[0],
+      company: r.company,
+      position: r.position,
+    }))
+    setRecipients(prev => mergeRecipientLists(prev, groupRecipients))
+    const dedupCount = groupRecipients.length
+    toast.success(
+      language === 'zh'
+        ? `已加载分组「${group.name}」(${dedupCount} 人，已自动去重)`
+        : `Loaded group "${group.name}" (${dedupCount} contacts, auto-deduplicated)`
+    )
+  }
+
+  const handleDeleteGroup = async (groupId: number) => {
+    if (!user?.id) return
+    try {
+      const res = await fetch(`/api/tools/email-sender/groups?id=${groupId}`, {
+        method: 'DELETE',
+        headers: { 'x-user-id': String(user.id) },
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(language === 'zh' ? '分组已删除' : 'Group deleted')
+        setRecipientGroups(prev => prev.filter(g => g.id !== groupId))
+      }
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }
+
+  // ====== Saved SMTP Configs Functions ======
+  const loadSavedSmtpConfigs = async () => {
+    if (!user?.id) return
+    setIsLoadingSmtpConfigs(true)
+    try {
+      const res = await fetch('/api/tools/email-sender/smtp-configs', {
+        headers: { 'x-user-id': String(user.id) },
+      })
+      const data = await res.json()
+      if (data.success) {
+        setSavedSmtpConfigs(data.configs || [])
+      }
+    } catch (e) {
+      console.error('[smtp-configs] load error:', e)
+    } finally {
+      setIsLoadingSmtpConfigs(false)
+    }
+  }
+
+  const handleSaveSmtpConfig = async () => {
+    if (!user?.id) {
+      toast.error(t.emailMultiSender.loginRequiredForTemplates)
+      return
+    }
+    if (!newSmtpConfigName.trim()) return
+    if (!smtpConfig.host || !smtpConfig.user || !smtpConfig.pass) {
+      toast.error(language === 'zh' ? '请先填写完整的 SMTP 配置' : 'Please fill in complete SMTP configuration')
+      return
+    }
+    try {
+      const res = await fetch('/api/tools/email-sender/smtp-configs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': String(user.id),
+        },
+        body: JSON.stringify({
+          name: newSmtpConfigName.trim(),
+          host: smtpConfig.host,
+          port: smtpConfig.port,
+          username: smtpConfig.user,
+          pass: smtpConfig.pass,
+          senderName: senderName,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(language === 'zh' ? 'SMTP 配置已保存' : 'SMTP config saved')
+        if (data.config) {
+          setSavedSmtpConfigs(prev => [data.config, ...prev])
+        } else {
+          loadSavedSmtpConfigs()
+        }
+        setNewSmtpConfigName("")
+        setShowSaveSmtpConfig(false)
+      } else {
+        toast.error(data.error || 'Failed to save config')
+      }
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }
+
+  const handleLoadSmtpConfig = async (config: SavedSmtpConfig) => {
+    if (!user?.id) return
+    try {
+      // Fetch the full config with plaintext password
+      const res = await fetch(`/api/tools/email-sender/smtp-configs?id=${config.id}`, {
+        headers: { 'x-user-id': String(user.id) },
+      })
+      const data = await res.json()
+      if (data.success && data.config) {
+        const c = data.config
+        setSmtpConfig({
+          host: c.host,
+          port: c.port,
+          user: c.username,
+          pass: c.pass,
+        })
+        setSenderName(c.sender_name || '')
+        toast.success(
+          language === 'zh'
+            ? `已加载 SMTP 配置「${config.name}」`
+            : `Loaded SMTP config "${config.name}"`
+        )
+      }
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }
+
+  const handleDeleteSmtpConfig = async (configId: number) => {
+    if (!user?.id) return
+    try {
+      const res = await fetch(`/api/tools/email-sender/smtp-configs?id=${configId}`, {
+        method: 'DELETE',
+        headers: { 'x-user-id': String(user.id) },
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(language === 'zh' ? 'SMTP 配置已删除' : 'SMTP config deleted')
+        setSavedSmtpConfigs(prev => prev.filter(c => c.id !== configId))
+      }
+    } catch (e: any) {
+      toast.error(e.message)
+    }
   }
 
   // Send history functions
@@ -972,6 +1220,80 @@ Best regards,
                   </div>
                 </div>
 
+                {/* Recipient Groups Section */}
+                {user?.id && (
+                  <div className="space-y-3 p-4 border rounded-lg bg-muted/20">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold flex items-center gap-2">
+                        <FolderPlus className="w-4 h-4" />
+                        {language === 'zh' ? '收件人分组' : 'Recipient Groups'}
+                      </h3>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" onClick={loadRecipientGroups} disabled={isLoadingGroups}>
+                          <RefreshCw className={`w-3 h-3 mr-1 ${isLoadingGroups ? 'animate-spin' : ''}`} />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Saved groups list */}
+                    {recipientGroups.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        {language === 'zh' ? '暂无已保存的分组。添加收件人后可保存为分组。' : 'No saved groups. Add recipients then save as a group.'}
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                        {recipientGroups.map((group) => (
+                          <div key={group.id} className="flex items-center justify-between p-2 rounded border bg-background hover:bg-muted/40 group/item transition-colors">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{group.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {Array.isArray(group.recipients) ? group.recipients.length : 0} {language === 'zh' ? '个联系人' : 'contacts'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 pl-2">
+                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleLoadGroup(group)}>
+                                {language === 'zh' ? '加载' : 'Load'}
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover/item:opacity-100 text-red-500" onClick={() => handleDeleteGroup(group.id)}>
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Save current recipients as group */}
+                    {recipients.length > 0 && (
+                      <div className="border-t pt-3 space-y-2">
+                        {showSaveGroup ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              placeholder={language === 'zh' ? '输入分组名称，如：国内投资人' : 'Group name, e.g. Domestic Investors'}
+                              value={newGroupName}
+                              onChange={(e) => setNewGroupName(e.target.value)}
+                              className="h-8"
+                              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveGroup() }}
+                            />
+                            <Button size="sm" onClick={handleSaveGroup} disabled={!newGroupName.trim()}>
+                              <Save className="w-3 h-3 mr-1" />
+                              {language === 'zh' ? '保存' : 'Save'}
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setShowSaveGroup(false)}>
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => setShowSaveGroup(true)}>
+                            <FolderPlus className="w-3 h-3 mr-1" />
+                            {language === 'zh' ? '保存为分组' : 'Save as Group'}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {recipients.length > 0 && (
                     <div className="space-y-4">
                       <div className="flex items-center justify-between border-b pb-2">
@@ -1033,6 +1355,45 @@ Best regards,
                 <CardDescription>{t.emailMultiSender.smtpSettingsDesc}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                 {/* Saved SMTP Configs Section */}
+                 {user?.id && (
+                   <div className="space-y-3 p-4 border rounded-lg bg-green-50/50 dark:bg-green-900/10">
+                     <div className="flex items-center justify-between">
+                       <h3 className="text-sm font-semibold flex items-center gap-2">
+                         <Database className="w-4 h-4" />
+                         {language === 'zh' ? '已保存的 SMTP 配置' : 'Saved SMTP Configs'}
+                       </h3>
+                       <Button variant="ghost" size="sm" onClick={loadSavedSmtpConfigs} disabled={isLoadingSmtpConfigs}>
+                         <RefreshCw className={`w-3 h-3 mr-1 ${isLoadingSmtpConfigs ? 'animate-spin' : ''}`} />
+                       </Button>
+                     </div>
+                     {savedSmtpConfigs.length === 0 ? (
+                       <p className="text-xs text-muted-foreground">
+                         {language === 'zh' ? '填写下方配置后可保存，下次直接选用。' : 'Fill in config below, then save for future use.'}
+                       </p>
+                     ) : (
+                       <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                         {savedSmtpConfigs.map((cfg) => (
+                           <div key={cfg.id} className="flex items-center justify-between p-2 rounded border bg-background hover:bg-muted/40 group/item transition-colors">
+                             <div className="flex-1 min-w-0">
+                               <p className="text-sm font-medium truncate">{cfg.name}</p>
+                               <p className="text-xs text-muted-foreground truncate">{cfg.username} · {cfg.host}:{cfg.port}</p>
+                             </div>
+                             <div className="flex items-center gap-1 pl-2">
+                               <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleLoadSmtpConfig(cfg)}>
+                                 {language === 'zh' ? '使用' : 'Use'}
+                               </Button>
+                               <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover/item:opacity-100 text-red-500" onClick={() => handleDeleteSmtpConfig(cfg.id)}>
+                                 <Trash2 className="w-3 h-3" />
+                               </Button>
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                   </div>
+                 )}
+
                  <div className="space-y-3">
                    <div className="flex items-center justify-between gap-3">
                      <Label className="text-xs uppercase text-muted-foreground font-semibold tracking-wider">
@@ -1108,6 +1469,35 @@ Best regards,
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <span>{t.emailMultiSender.smtpHint}</span>
                  </div>
+
+                 {/* Save current SMTP config button */}
+                 {user?.id && (
+                   <div className="border-t pt-4 space-y-2">
+                     {showSaveSmtpConfig ? (
+                       <div className="flex items-center gap-2">
+                         <Input
+                           placeholder={language === 'zh' ? '配置名称，如：我的 Gmail' : 'Config name, e.g. My Gmail'}
+                           value={newSmtpConfigName}
+                           onChange={(e) => setNewSmtpConfigName(e.target.value)}
+                           className="h-8"
+                           onKeyDown={(e) => { if (e.key === 'Enter') handleSaveSmtpConfig() }}
+                         />
+                         <Button size="sm" onClick={handleSaveSmtpConfig} disabled={!newSmtpConfigName.trim() || !smtpConfig.host}>
+                           <Save className="w-3 h-3 mr-1" />
+                           {language === 'zh' ? '保存' : 'Save'}
+                         </Button>
+                         <Button size="sm" variant="ghost" onClick={() => setShowSaveSmtpConfig(false)}>
+                           <X className="w-3 h-3" />
+                         </Button>
+                       </div>
+                     ) : (
+                       <Button size="sm" variant="outline" onClick={() => setShowSaveSmtpConfig(true)} disabled={!smtpConfig.host || !smtpConfig.user || !smtpConfig.pass}>
+                         <Database className="w-3 h-3 mr-1" />
+                         {language === 'zh' ? '保存当前配置以便下次使用' : 'Save this config for next time'}
+                       </Button>
+                     )}
+                   </div>
+                 )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1160,11 +1550,41 @@ Best regards,
                 )}
 
                 <div className="space-y-2">
-                  <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                  <Select value={selectedTemplate} onValueChange={(val) => {
+                    setSelectedTemplate(val)
+                    // Clear loaded user template name when switching templates
+                    if (val !== 'custom') setLoadedUserTemplateName('')
+                    // If selecting a user template from dropdown, load its content
+                    if (val.startsWith('user-')) {
+                      const tmplId = parseInt(val.replace('user-', ''))
+                      const tmpl = userTemplates.find(ut => ut.id === tmplId)
+                      if (tmpl) {
+                        setCustomSubject(tmpl.subject)
+                        setCustomContent(tmpl.content)
+                        setLoadedUserTemplateName(tmpl.name)
+                        setSelectedTemplate('custom')
+                      }
+                    }
+                  }}>
                     <SelectTrigger>
                       <SelectValue placeholder={t.emailMultiSender.chooseTemplatePlaceholder} />
                     </SelectTrigger>
                     <SelectContent>
+                      {/* User saved templates */}
+                      {userTemplates.length > 0 && (
+                        <>
+                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                            {t.emailMultiSender.savedTemplates}
+                          </div>
+                          {userTemplates.map((tmpl) => (
+                            <SelectItem key={`user-${tmpl.id}`} value={`user-${tmpl.id}`}>
+                              ★ {tmpl.name}
+                            </SelectItem>
+                          ))}
+                          <div className="my-1 border-t" />
+                        </>
+                      )}
+                      {/* Built-in templates */}
                       {templates.map((template) => (
                           <SelectItem key={template.id} value={template.id}>
                             {template.name}
@@ -1562,8 +1982,12 @@ Best regards,
                         {selectedTemplate ? <CheckCircle className="w-4 h-4 text-green-500" /> : <AlertCircle className="w-4 h-4 text-red-400" />}
                         {t.emailMultiSender.templateLabel || t.emailMultiSender.template || "Template"}
                      </span>
-                     <span className="text-muted-foreground max-w-[100px] truncate block text-right">
-                       {selectedTemplate === 'custom' ? (t.emailMultiSender.custom || "Custom") : templates.find(t=>t.id === selectedTemplate)?.name || (t.emailMultiSender.none || 'None')}
+                     <span className="text-muted-foreground max-w-[120px] truncate block text-right">
+                       {selectedTemplate === 'custom'
+                         ? (loadedUserTemplateName || t.emailMultiSender.custom || "Custom")
+                         : selectedTemplate?.startsWith('user-')
+                           ? (userTemplates.find(u => `user-${u.id}` === selectedTemplate)?.name || t.emailMultiSender.custom)
+                           : templates.find(t=>t.id === selectedTemplate)?.name || (t.emailMultiSender.none || 'None')}
                      </span>
                   </div>
 
