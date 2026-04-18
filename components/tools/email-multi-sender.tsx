@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
-import { Upload, Mail, Users, FileText, Send, Clock, CheckCircle, AlertCircle, Eye, Settings, Plus, Trash2, X, Save, History, RefreshCw, ArrowLeft, Download, MailOpen, MailX, FolderPlus, Database } from "lucide-react"
+import { Upload, Mail, Users, FileText, Send, Clock, CheckCircle, AlertCircle, Eye, Settings, Plus, Trash2, X, Save, History, RefreshCw, ArrowLeft, Download, MailOpen, MailX, FolderPlus, Database, ShieldCheck, ShieldAlert, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { emitToolSuccess } from "@/lib/credits/tool-success"
 
@@ -42,6 +42,7 @@ interface Recipient {
   position?: string
   status?: 'pending' | 'sent' | 'failed'
   error?: string
+  domainValid?: boolean // true=MX/A valid, false=domain not found, undefined=not checked
 }
 
 interface RecipientGroup {
@@ -159,6 +160,10 @@ export function EmailMultiSender() {
   const [isLoadingSmtpConfigs, setIsLoadingSmtpConfigs] = useState(false)
   const [showSaveSmtpConfig, setShowSaveSmtpConfig] = useState(false)
   const [newSmtpConfigName, setNewSmtpConfigName] = useState("")
+
+  // Email domain validation state
+  const [isValidating, setIsValidating] = useState(false)
+  const [validationDone, setValidationDone] = useState(false)
 
   // Load user templates, groups, and smtp configs on mount
   useEffect(() => {
@@ -1305,16 +1310,128 @@ Best regards,
                         <div className="flex items-center gap-2">
                           <h3 className="text-sm font-medium">{t.emailMultiSender.loadedRecipients}</h3>
                           <Badge variant="secondary">{recipients.length}</Badge>
+                          {validationDone && (
+                            <>
+                              <Badge variant="default" className="bg-green-500 text-[10px] h-5">
+                                <ShieldCheck className="w-3 h-3 mr-1" />
+                                {recipients.filter(r => r.domainValid === true).length} {language === 'zh' ? '有效' : 'valid'}
+                              </Badge>
+                              {recipients.filter(r => r.domainValid === false).length > 0 && (
+                                <Badge variant="destructive" className="text-[10px] h-5">
+                                  <ShieldAlert className="w-3 h-3 mr-1" />
+                                  {recipients.filter(r => r.domainValid === false).length} {language === 'zh' ? '无效' : 'invalid'}
+                                </Badge>
+                              )}
+                            </>
+                          )}
                         </div>
-                        <Button variant="ghost" size="sm" onClick={handleClearRecipients} className="text-red-500 hover:text-red-700 h-8">
-                          <Trash2 className="w-4 h-4 mr-2" /> {t.emailMultiSender.clearAll}
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          {/* Validate Emails Button */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              setIsValidating(true)
+                              try {
+                                const emails = recipients.map(r => r.email)
+                                const res = await fetch('/api/tools/email-sender/validate', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ emails }),
+                                })
+                                const data = await res.json()
+                                if (data.success) {
+                                  const resultMap = new Map<string, { valid: boolean; reason?: string }>()
+                                  for (const r of data.results) {
+                                    resultMap.set(r.email.toLowerCase(), { valid: r.valid, reason: r.reason })
+                                  }
+                                  setRecipients(prev => prev.map(rec => {
+                                    const result = resultMap.get(rec.email.toLowerCase())
+                                    if (result) {
+                                      return {
+                                        ...rec,
+                                        domainValid: result.valid,
+                                        error: result.valid ? undefined : (
+                                          result.reason === 'DOMAIN_NOT_FOUND' ? (language === 'zh' ? '域名不存在 (DNS解析失败)' : 'Domain not found (DNS resolution failed)')
+                                          : result.reason === 'NO_MX_RECORD' ? (language === 'zh' ? '无邮件服务器 (无MX记录)' : 'No mail server (no MX record)')
+                                          : result.reason === 'INVALID_FORMAT' ? (language === 'zh' ? '邮箱格式错误' : 'Invalid email format')
+                                          : (language === 'zh' ? 'DNS查询失败' : 'DNS lookup failed')
+                                        ),
+                                      }
+                                    }
+                                    return rec
+                                  }))
+                                  setValidationDone(true)
+                                  if (data.invalid > 0) {
+                                    toast.warning(
+                                      language === 'zh'
+                                        ? `验证完成：${data.valid} 个有效，${data.invalid} 个无效域名`
+                                        : `Validation done: ${data.valid} valid, ${data.invalid} invalid domains`,
+                                      { duration: 5000 }
+                                    )
+                                  } else {
+                                    toast.success(
+                                      language === 'zh'
+                                        ? `所有 ${data.valid} 个邮箱域名均有效 ✓`
+                                        : `All ${data.valid} email domains are valid ✓`
+                                    )
+                                  }
+                                } else {
+                                  toast.error(data.error || 'Validation failed')
+                                }
+                              } catch (e: any) {
+                                toast.error(e.message || 'Validation error')
+                              } finally {
+                                setIsValidating(false)
+                              }
+                            }}
+                            disabled={isValidating}
+                            className="h-8 text-xs"
+                          >
+                            {isValidating ? (
+                              <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> {language === 'zh' ? '验证中...' : 'Validating...'}</>
+                            ) : (
+                              <><ShieldCheck className="w-3 h-3 mr-1" /> {language === 'zh' ? '验证邮箱' : 'Validate'}</>
+                            )}
+                          </Button>
+                          {/* Remove Invalid Button - only show after validation */}
+                          {validationDone && recipients.some(r => r.domainValid === false) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const invalidCount = recipients.filter(r => r.domainValid === false).length
+                                setRecipients(prev => prev.filter(r => r.domainValid !== false))
+                                toast.success(
+                                  language === 'zh'
+                                    ? `已移除 ${invalidCount} 个无效邮箱`
+                                    : `Removed ${invalidCount} invalid emails`
+                                )
+                              }}
+                              className="h-8 text-xs text-orange-600 border-orange-300 hover:bg-orange-50"
+                            >
+                              <ShieldAlert className="w-3 h-3 mr-1" />
+                              {language === 'zh' ? '移除无效' : 'Remove Invalid'}
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="sm" onClick={handleClearRecipients} className="text-red-500 hover:text-red-700 h-8">
+                            <Trash2 className="w-4 h-4 mr-2" /> {t.emailMultiSender.clearAll}
+                          </Button>
+                        </div>
                       </div>
                       <div className="max-h-[400px] overflow-y-auto space-y-2 pr-2">
                         {recipients.map((recipient, index) => (
-                            <div key={index} className="flex items-center justify-between p-3 bg-muted/40 hover:bg-muted border rounded-lg transition-colors group">
+                            <div key={index} className={`flex items-center justify-between p-3 border rounded-lg transition-colors group ${
+                              recipient.domainValid === false
+                                ? 'bg-red-50/80 border-red-200 hover:bg-red-100/80 dark:bg-red-950/20 dark:border-red-900/40'
+                                : recipient.domainValid === true
+                                  ? 'bg-green-50/40 border-green-200/60 hover:bg-green-100/40 dark:bg-green-950/10 dark:border-green-900/30'
+                                  : 'bg-muted/40 hover:bg-muted'
+                            }`}>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
+                                  {recipient.domainValid === true && <ShieldCheck className="w-3.5 h-3.5 text-green-500 shrink-0" />}
+                                  {recipient.domainValid === false && <ShieldAlert className="w-3.5 h-3.5 text-red-500 shrink-0" />}
                                   <p className="font-medium text-sm truncate">{recipient.email}</p>
                                   {recipient.name && <Badge variant="outline" className="text-[10px] h-4 px-1">{recipient.name}</Badge>}
                                 </div>
@@ -1332,7 +1449,7 @@ Best regards,
                               <div className="flex items-center gap-2 pl-2">
                                 {recipient.status === 'sent' && <Badge variant="default" className="bg-green-500 hover:bg-green-600">Sent</Badge>}
                                 {recipient.status === 'failed' && <Badge variant="destructive">Failed</Badge>}
-                                {!recipient.status && <div className="w-2 h-2 rounded-full bg-slate-300" />}
+                                {!recipient.status && recipient.domainValid === undefined && <div className="w-2 h-2 rounded-full bg-slate-300" />}
                                 <Button size="icon" variant="ghost" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => {
                                   const newRecipients = [...recipients];
                                   newRecipients.splice(index, 1);
