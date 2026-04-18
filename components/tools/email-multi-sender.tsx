@@ -212,9 +212,14 @@ export function EmailMultiSender() {
         // Optimistic update: immediately add to local state
         if (data.template) {
           setUserTemplates(prev => [data.template, ...prev])
+          // Auto-select the saved template so Campaign Summary shows the name
+          setSelectedTemplate('custom')
+          setLoadedUserTemplateName(data.template.name)
         } else {
           // fallback: reload from server
           loadUserTemplates()
+          setSelectedTemplate('custom')
+          setLoadedUserTemplateName(newTemplateName.trim())
         }
         setNewTemplateName("")
         setShowSaveTemplate(false)
