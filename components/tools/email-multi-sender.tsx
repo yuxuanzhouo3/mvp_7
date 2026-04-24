@@ -296,10 +296,10 @@ export function EmailMultiSender() {
     setCustomContent(tmpl.content)
     setLoadedUserTemplateName(tmpl.name)
 
-    // Restore template attachments
+    // Always reset attachments to match the loaded template
     const restoredAttachments = restoreAttachmentsFromTemplate(tmpl.attachments || [])
+    setAttachments(restoredAttachments)
     if (restoredAttachments.length > 0) {
-      setAttachments(restoredAttachments)
       toast.success(
         language === 'zh'
           ? `模板已加载（含 ${restoredAttachments.length} 个附件）`
@@ -1778,8 +1778,11 @@ Best regards,
                 <div className="space-y-2">
                   <Select value={selectedTemplate} onValueChange={(val) => {
                     setSelectedTemplate(val)
-                    // Clear loaded user template name when switching templates
-                    if (val !== 'custom') setLoadedUserTemplateName('')
+                    // Clear loaded user template name and attachments when switching templates
+                    if (val !== 'custom') {
+                      setLoadedUserTemplateName('')
+                      setAttachments([])
+                    }
                     // If selecting a user template from dropdown, load its content
                     if (val.startsWith('user-')) {
                       const tmplId = parseInt(val.replace('user-', ''))
@@ -1789,11 +1792,9 @@ Best regards,
                         setCustomContent(tmpl.content)
                         setLoadedUserTemplateName(tmpl.name)
                         setSelectedTemplate('custom')
-                        // Restore attachments from template
+                        // Always reset attachments to match the selected template
                         const restoredFiles = restoreAttachmentsFromTemplate(tmpl.attachments || [])
-                        if (restoredFiles.length > 0) {
-                          setAttachments(restoredFiles)
-                        }
+                        setAttachments(restoredFiles)
                       }
                     }
                   }}>
