@@ -31,9 +31,21 @@ function isConnectionTimeoutError(error: any): boolean {
   )
 }
 
+function isAuthError(error: any): boolean {
+  const code = String(error?.code || '').toUpperCase()
+  const message = String(error?.message || '').toLowerCase()
+  return (
+    code === 'EAUTH' ||
+    message.includes('535') ||
+    message.includes('authentication failed') ||
+    message.includes('invalid login')
+  )
+}
+
 function isRetryableError(error: any): boolean {
   return (
     isConnectionTimeoutError(error) ||
+    isAuthError(error) ||
     String(error?.code || '').toUpperCase() === 'ECONNRESET' ||
     String(error?.message || '').toLowerCase().includes('connection closed')
   )
@@ -51,6 +63,9 @@ function createTransporter(smtpConfig: any, port: number) {
     connectionTimeout: 15000,
     greetingTimeout: 15000,
     socketTimeout: 15000,
+    tls: {
+      rejectUnauthorized: false,
+    },
   })
 }
 
@@ -66,8 +81,8 @@ async function verifyAndSendWithPort(port: number, smtpConfig: any, mailOptions:
   })
 }
 
-// 带重试的发送
-async function sendWithRetry(port: number, smtpConfig: any, mailOptions: any, maxRetries = 1): Promise<any> {
+// 带重试的发送（网易126/163等邮箱首次连接可能返回瞬态535错误，需要重试）
+async function sendWithRetry(port: number, smtpConfig: any, mailOptions: any, maxRetries = 2): Promise<any> {
   let lastError: any = null
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -75,9 +90,12 @@ async function sendWithRetry(port: number, smtpConfig: any, mailOptions: any, ma
     } catch (error: any) {
       lastError = error
       if (attempt < maxRetries && isRetryableError(error)) {
-        console.log(`[email-sender] Retry attempt ${attempt + 1} for ${mailOptions.to}`)
-        // 重试前等待 2-4 秒
-        await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 2000))
+        const isAuth = isAuthError(error)
+        console.log(`[email-sender] Retry attempt ${attempt + 1} for ${mailOptions.to} (${isAuth ? 'auth' : 'network'} error)`)
+        // 认证错误等待更长时间（3-6秒），网络错误等 2-4 秒
+        const baseDelay = isAuth ? 3000 : 2000
+        const jitter = isAuth ? 3000 : 2000
+        await new Promise(resolve => setTimeout(resolve, baseDelay + Math.random() * jitter))
         continue
       }
       throw error
