@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
-import { Upload, Mail, Users, FileText, Send, Clock, CheckCircle, AlertCircle, Eye, Settings, Plus, Trash2, X, Save, History, RefreshCw, ArrowLeft, Download, MailOpen, MailX, FolderPlus, Database, ShieldCheck, ShieldAlert, Loader2, ChevronDown, ChevronUp, Zap, Plug } from "lucide-react"
+import { Upload, Mail, Users, FileText, Send, Clock, CheckCircle, AlertCircle, Eye, Settings, Plus, Trash2, X, Save, History, RefreshCw, ArrowLeft, Download, MailOpen, MailX, FolderPlus, Database, ShieldCheck, ShieldAlert, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { emitToolSuccess } from "@/lib/credits/tool-success"
 
@@ -125,11 +125,7 @@ export function EmailMultiSender() {
     pass: ""
   })
   const [senderName, setSenderName] = useState("")
-  // Smart SMTP auto-detect state
-  const [showAdvancedSmtp, setShowAdvancedSmtp] = useState(false)
-  const [detectedProvider, setDetectedProvider] = useState<string | null>(null)
-  const [isTestingConnection, setIsTestingConnection] = useState(false)
-  const [connectionTestResult, setConnectionTestResult] = useState<{ success: boolean; error?: string } | null>(null)
+  const [smtpGuideProvider, setSmtpGuideProvider] = useState<'gmail' | 'outlook' | 'qq' | '163' | 'sina'>('gmail')
   const [sendingRate, setSendingRate] = useState("normal") // slow, normal, fast
   const [sendStats, setSendStats] = useState({ success: 0, failed: 0 })
   const [newRecipientEmail, setNewRecipientEmail] = useState("")
@@ -637,92 +633,23 @@ export function EmailMultiSender() {
     setRecipients([])
   }
 
-  // ====== Smart SMTP Auto-Detection ======
-  const SMTP_PROVIDER_MAP: Record<string, { host: string; port: string; name: string }> = {
-    'gmail.com': { host: 'smtp.gmail.com', port: '465', name: 'Gmail' },
-    'googlemail.com': { host: 'smtp.gmail.com', port: '465', name: 'Gmail' },
-    'outlook.com': { host: 'smtp.office365.com', port: '587', name: 'Outlook' },
-    'hotmail.com': { host: 'smtp.office365.com', port: '587', name: 'Outlook' },
-    'live.com': { host: 'smtp.office365.com', port: '587', name: 'Outlook' },
-    'msn.com': { host: 'smtp.office365.com', port: '587', name: 'Outlook' },
-    'qq.com': { host: 'smtp.qq.com', port: '465', name: 'QQ Mail' },
-    'foxmail.com': { host: 'smtp.qq.com', port: '465', name: 'QQ Mail' },
-    '163.com': { host: 'smtp.163.com', port: '465', name: '163 Mail' },
-    '126.com': { host: 'smtp.126.com', port: '465', name: '126 Mail' },
-    'yeah.net': { host: 'smtp.yeah.net', port: '465', name: 'Yeah.net' },
-    'sina.com': { host: 'smtp.sina.com', port: '465', name: 'Sina Mail' },
-    'sina.cn': { host: 'smtp.sina.com', port: '465', name: 'Sina Mail' },
-    'yahoo.com': { host: 'smtp.mail.yahoo.com', port: '465', name: 'Yahoo Mail' },
-    'icloud.com': { host: 'smtp.mail.me.com', port: '587', name: 'iCloud Mail' },
-    'me.com': { host: 'smtp.mail.me.com', port: '587', name: 'iCloud Mail' },
-    'mac.com': { host: 'smtp.mail.me.com', port: '587', name: 'iCloud Mail' },
-    'zoho.com': { host: 'smtp.zoho.com', port: '465', name: 'Zoho Mail' },
-    'protonmail.com': { host: 'smtp.protonmail.ch', port: '465', name: 'ProtonMail' },
-    'proton.me': { host: 'smtp.protonmail.ch', port: '465', name: 'ProtonMail' },
-    'yandex.com': { host: 'smtp.yandex.com', port: '465', name: 'Yandex Mail' },
-    'aol.com': { host: 'smtp.aol.com', port: '465', name: 'AOL Mail' },
-    'mail.ru': { host: 'smtp.mail.ru', port: '465', name: 'Mail.ru' },
-    'aliyun.com': { host: 'smtp.aliyun.com', port: '465', name: 'Aliyun Mail' },
-  }
-
-  const autoDetectSmtpProvider = useCallback((email: string) => {
-    const atIndex = email.indexOf('@')
-    if (atIndex === -1) {
-      setDetectedProvider(null)
-      return
-    }
-    const domain = email.substring(atIndex + 1).toLowerCase().trim()
-    if (!domain || !domain.includes('.')) {
-      setDetectedProvider(null)
-      return
-    }
-
-    const provider = SMTP_PROVIDER_MAP[domain]
-    if (provider) {
-      setSmtpConfig(prev => ({ ...prev, host: provider.host, port: provider.port }))
-      setDetectedProvider(provider.name)
-      setShowAdvancedSmtp(false)
-      setConnectionTestResult(null)
-    } else {
-      setDetectedProvider(null)
-      // Don't clear host/port — user may have filled them manually
-    }
-  }, [])
-
-  const handleSmtpEmailChange = useCallback((email: string) => {
-    setSmtpConfig(prev => ({ ...prev, user: email }))
-    setConnectionTestResult(null)
-    autoDetectSmtpProvider(email)
-  }, [autoDetectSmtpProvider])
-
-  const handleTestConnection = async () => {
-    if (!smtpConfig.host || !smtpConfig.user || !smtpConfig.pass) {
-      toast.error(language === 'zh' ? '请先填写完整的邮箱和授权码' : 'Please fill in email and app password first')
-      return
-    }
-    setIsTestingConnection(true)
-    setConnectionTestResult(null)
-    try {
-      const res = await fetch('/api/tools/email-sender/test-connection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(smtpConfig),
-      })
-      const data = await res.json()
-      setConnectionTestResult(data)
-      if (data.success) {
-        toast.success(t.emailMultiSender.smtpTestSuccess)
-      } else {
-        toast.error(
-          (t.emailMultiSender.smtpTestFailed || 'Connection failed: {error}').replace('{error}', data.error || 'Unknown error')
-        )
-      }
-    } catch (e: any) {
-      const result = { success: false, error: e.message }
-      setConnectionTestResult(result)
-      toast.error(e.message)
-    } finally {
-      setIsTestingConnection(false)
+  const fillSmtpPreset = (preset: string) => {
+    switch (preset) {
+      case 'gmail':
+        setSmtpConfig({ ...smtpConfig, host: 'smtp.gmail.com', port: '465' })
+        break
+      case 'outlook':
+        setSmtpConfig({ ...smtpConfig, host: 'smtp.office365.com', port: '587' })
+        break
+      case 'qq':
+        setSmtpConfig({ ...smtpConfig, host: 'smtp.qq.com', port: '465' })
+        break
+      case '163':
+        setSmtpConfig({ ...smtpConfig, host: 'smtp.163.com', port: '465' })
+        break
+      case 'sina':
+        setSmtpConfig({ ...smtpConfig, host: 'smtp.sina.com', port: '465' })
+        break
     }
   }
 
@@ -1544,187 +1471,122 @@ Best regards,
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Zap className="w-5 h-5" />
-                  {t.emailMultiSender.smtpSimpleMode || 'Quick Setup'}
+                  <Settings className="w-5 h-5" />
+                  {t.emailMultiSender.smtpSettingsTitle}
                 </CardTitle>
-                <CardDescription>{t.emailMultiSender.smtpSimpleModeDesc || 'Auto-detects your email provider. Just enter email and app password.'}</CardDescription>
+                <CardDescription>{t.emailMultiSender.smtpSettingsDesc}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                  {/* Saved SMTP Configs Section */}
-                 {user?.id && savedSmtpConfigs.length > 0 && (
+                 {user?.id && (
                    <div className="space-y-3 p-4 border rounded-lg bg-green-50/50 dark:bg-green-900/10">
                      <div className="flex items-center justify-between">
                        <h3 className="text-sm font-semibold flex items-center gap-2">
                          <Database className="w-4 h-4" />
-                         {language === 'zh' ? '已保存的配置（一键加载）' : 'Saved Configs (one-click load)'}
+                         {language === 'zh' ? '已保存的 SMTP 配置' : 'Saved SMTP Configs'}
                        </h3>
                        <Button variant="ghost" size="sm" onClick={loadSavedSmtpConfigs} disabled={isLoadingSmtpConfigs}>
                          <RefreshCw className={`w-3 h-3 mr-1 ${isLoadingSmtpConfigs ? 'animate-spin' : ''}`} />
                        </Button>
                      </div>
-                     <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                       {savedSmtpConfigs.map((cfg) => (
-                         <div key={cfg.id} className="flex items-center justify-between p-2 rounded border bg-background hover:bg-muted/40 group/item transition-colors">
-                           <div className="flex-1 min-w-0">
-                             <p className="text-sm font-medium truncate">{cfg.name}</p>
-                             <p className="text-xs text-muted-foreground truncate">{cfg.username} · {cfg.host}:{cfg.port}</p>
-                           </div>
-                           <div className="flex items-center gap-1 pl-2">
-                             <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleLoadSmtpConfig(cfg)}>
-                               {language === 'zh' ? '使用' : 'Use'}
-                             </Button>
-                             <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover/item:opacity-100 text-red-500" onClick={() => handleDeleteSmtpConfig(cfg.id)}>
-                               <Trash2 className="w-3 h-3" />
-                             </Button>
-                           </div>
-                         </div>
-                       ))}
-                     </div>
-                   </div>
-                 )}
-
-                 {/* Primary Simple Form: Email + Auth Code */}
-                 <div className="space-y-4">
-                   {/* Email Input with auto-detect */}
-                   <div className="space-y-2">
-                     <Label className="text-base font-medium">{t.emailMultiSender.smtpEmailLabel}</Label>
-                     <Input
-                       placeholder="your-email@gmail.com"
-                       value={smtpConfig.user}
-                       onChange={(e) => handleSmtpEmailChange(e.target.value)}
-                       className="h-11 text-base"
-                     />
-                     {/* Auto-detect result badge */}
-                     {smtpConfig.user && smtpConfig.user.includes('@') && (
-                       detectedProvider ? (
-                         <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 animate-in fade-in slide-in-from-top-1">
-                           <CheckCircle className="w-4 h-4" />
-                           <span>
-                             {(t.emailMultiSender.smtpAutoDetected || 'Auto-detected as {provider}').replace('{provider}', detectedProvider)}
-                           </span>
-                         </div>
-                       ) : (
-                         <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 animate-in fade-in slide-in-from-top-1">
-                           <AlertCircle className="w-4 h-4" />
-                           <span>{t.emailMultiSender.smtpUnknownProvider}</span>
-                         </div>
-                       )
-                     )}
-                   </div>
-
-                   {/* Auth Code / App Password */}
-                   <div className="space-y-2">
-                     <Label className="text-base font-medium">{t.emailMultiSender.smtpAuthCode}</Label>
-                     <Input
-                       type="password"
-                       placeholder={language === 'zh' ? '粘贴授权码或应用专用密码' : 'Paste your app password or auth code'}
-                       value={smtpConfig.pass}
-                       onChange={(e) => {
-                         setSmtpConfig(prev => ({ ...prev, pass: e.target.value }))
-                         setConnectionTestResult(null)
-                       }}
-                       className="h-11 text-base"
-                     />
-                     <p className="text-xs text-muted-foreground">
-                       {t.emailMultiSender.smtpAuthCodeHint}
-                     </p>
-                   </div>
-
-                   {/* Sender Name — always visible but compact */}
-                   <div className="space-y-2">
-                     <Label>{t.emailMultiSender.smtpSenderNameLabel || (language === 'zh' ? '发件人名称（可选）' : 'Sender Name (optional)')}</Label>
-                     <Input
-                       placeholder={t.emailMultiSender.smtpSenderNameHint || (language === 'zh' ? '例如：张三 / 品牌名' : 'e.g. Your Name / Brand')}
-                       value={senderName}
-                       onChange={(e) => setSenderName(e.target.value)}
-                       className="h-9"
-                     />
-                   </div>
-                 </div>
-
-                 {/* Test Connection + Advanced Toggle Row */}
-                 <div className="flex items-center gap-3 flex-wrap">
-                   <Button
-                     variant="outline"
-                     size="sm"
-                     onClick={handleTestConnection}
-                     disabled={isTestingConnection || !smtpConfig.user || !smtpConfig.pass || !smtpConfig.host}
-                     className={`h-9 ${
-                       connectionTestResult?.success
-                         ? 'border-green-400 text-green-700 bg-green-50 hover:bg-green-100 dark:border-green-700 dark:text-green-400 dark:bg-green-950/30'
-                         : connectionTestResult && !connectionTestResult.success
-                           ? 'border-red-400 text-red-700 bg-red-50 hover:bg-red-100 dark:border-red-700 dark:text-red-400 dark:bg-red-950/30'
-                           : ''
-                     }`}
-                   >
-                     {isTestingConnection ? (
-                       <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> {t.emailMultiSender.smtpTesting}</>  
-                     ) : connectionTestResult?.success ? (
-                       <><CheckCircle className="w-4 h-4 mr-1.5" /> {t.emailMultiSender.smtpTestSuccess?.replace(' ✓', '') || 'Connection OK'}</>  
+                     {savedSmtpConfigs.length === 0 ? (
+                       <p className="text-xs text-muted-foreground">
+                         {language === 'zh' ? '填写下方配置后可保存，下次直接选用。' : 'Fill in config below, then save for future use.'}
+                       </p>
                      ) : (
-                       <><Plug className="w-4 h-4 mr-1.5" /> {t.emailMultiSender.smtpTestConnection}</>  
+                       <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                         {savedSmtpConfigs.map((cfg) => (
+                           <div key={cfg.id} className="flex items-center justify-between p-2 rounded border bg-background hover:bg-muted/40 group/item transition-colors">
+                             <div className="flex-1 min-w-0">
+                               <p className="text-sm font-medium truncate">{cfg.name}</p>
+                               <p className="text-xs text-muted-foreground truncate">{cfg.username} · {cfg.host}:{cfg.port}</p>
+                             </div>
+                             <div className="flex items-center gap-1 pl-2">
+                               <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleLoadSmtpConfig(cfg)}>
+                                 {language === 'zh' ? '使用' : 'Use'}
+                               </Button>
+                               <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover/item:opacity-100 text-red-500" onClick={() => handleDeleteSmtpConfig(cfg.id)}>
+                                 <Trash2 className="w-3 h-3" />
+                               </Button>
+                             </div>
+                           </div>
+                         ))}
+                       </div>
                      )}
-                   </Button>
-
-                   <Button
-                     variant="ghost"
-                     size="sm"
-                     onClick={() => setShowAdvancedSmtp(!showAdvancedSmtp)}
-                     className="h-9 text-muted-foreground"
-                   >
-                     <Settings className="w-4 h-4 mr-1.5" />
-                     {t.emailMultiSender.smtpAdvancedSettings}
-                     {showAdvancedSmtp ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
-                   </Button>
-                 </div>
-
-                 {/* Connection test error detail */}
-                 {connectionTestResult && !connectionTestResult.success && (
-                   <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 p-3 rounded-lg border border-red-200 dark:border-red-900/40 flex items-start gap-2 animate-in fade-in slide-in-from-top-2">
-                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                     <span>{connectionTestResult.error}</span>
                    </div>
                  )}
 
-                 {/* Collapsible Advanced Settings */}
-                 {showAdvancedSmtp && (
-                   <div className="space-y-4 p-4 border rounded-lg bg-muted/20 animate-in fade-in slide-in-from-top-2">
-                     <h4 className="text-xs uppercase text-muted-foreground font-semibold tracking-wider">
-                       {t.emailMultiSender.smtpAdvancedSettings}
+                 <div className="space-y-3">
+                   <div className="flex items-center justify-between gap-3">
+                     <Label className="text-xs uppercase text-muted-foreground font-semibold tracking-wider">
+                       {language === 'zh' ? 'SMTP 配置教程' : 'SMTP Setup Guide'}
+                     </Label>
+                     <Select value={smtpGuideProvider} onValueChange={(value) => setSmtpGuideProvider(value as any)}>
+                       <SelectTrigger className="w-[180px] h-8">
+                         <SelectValue placeholder="Select provider" />
+                       </SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="gmail">Gmail</SelectItem>
+                         <SelectItem value="outlook">Outlook / M365</SelectItem>
+                         <SelectItem value="qq">QQ Mail</SelectItem>
+                         <SelectItem value="163">163 Mail</SelectItem>
+                         <SelectItem value="sina">Sina Mail</SelectItem>
+                       </SelectContent>
+                     </Select>
+                   </div>
+
+                   <div className="rounded-lg border border-blue-200/70 bg-blue-50/70 p-4 dark:border-blue-900/60 dark:bg-blue-950/20 space-y-2">
+                     <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                       {smtpGuideProvider === 'gmail' ? (t.emailMultiSender.gmailGuideTitle || "Gmail Setup Guide")
+                        : smtpGuideProvider === 'outlook' ? (language === 'zh' ? 'Outlook 配置教程' : 'Outlook Setup Guide')
+                        : smtpGuideProvider === 'qq' ? (language === 'zh' ? 'QQ 邮箱配置教程' : 'QQ Mail Setup Guide')
+                        : smtpGuideProvider === '163' ? (language === 'zh' ? '163 邮箱配置教程' : '163 Mail Setup Guide')
+                        : (language === 'zh' ? 'Sina 邮箱配置教程' : 'Sina Mail Setup Guide')}
                      </h4>
-                     <div className="grid grid-cols-2 gap-4">
-                       <div className="space-y-2">
-                         <Label>{t.emailMultiSender.smtpHost}</Label>
-                         <Input
-                           placeholder="smtp.example.com"
-                           value={smtpConfig.host}
-                           onChange={(e) => {
-                             setSmtpConfig(prev => ({ ...prev, host: e.target.value }))
-                             setConnectionTestResult(null)
-                           }}
-                         />
-                       </div>
-                       <div className="space-y-2">
-                         <Label>{t.emailMultiSender.smtpPort}</Label>
-                         <Input
-                           placeholder="465"
-                           value={smtpConfig.port}
-                           onChange={(e) => {
-                             setSmtpConfig(prev => ({ ...prev, port: e.target.value }))
-                             setConnectionTestResult(null)
-                           }}
-                         />
-                       </div>
-                     </div>
-                     <p className="text-[11px] text-muted-foreground">
-                       {language === 'zh'
-                         ? '通常无需手动修改，邮箱输入后会自动识别。如遇到连接问题可在此调整。'
-                         : 'Usually auto-detected from your email. Adjust here if you encounter connection issues.'}
+                     <p className="text-xs text-blue-800/90 dark:text-blue-300/90">
+                       {language === 'zh' ? '点击下方预设按钮自动填入主机和端口，再填写邮箱和授权码/应用密码即可。' : 'Click the preset button below to auto-fill host and port, then enter your email and authorization code/app password.'}
                      </p>
                    </div>
-                 )}
+                 </div>
 
-                 {/* Hint */}
+                 {/* Quick Presets */}
+                 <div className="bg-muted/30 p-4 rounded-lg space-y-3">
+                    <Label className="text-xs uppercase text-muted-foreground font-semibold tracking-wider">{t.emailMultiSender.quickPresets}</Label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('gmail')} className="bg-white dark:bg-slate-950">Gmail</Button>
+                      <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('outlook')} className="bg-white dark:bg-slate-950">Outlook</Button>
+                      <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('qq')} className="bg-white dark:bg-slate-950">QQ Mail</Button>
+                      <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('163')} className="bg-white dark:bg-slate-950">163 Mail</Button>
+                      <Button variant="outline" size="sm" onClick={() => fillSmtpPreset('sina')} className="bg-white dark:bg-slate-950">Sina Mail</Button>
+                    </div>
+                 </div>
+
+                 <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>{t.emailMultiSender.smtpHost}</Label>
+                          <Input placeholder="smtp.example.com" value={smtpConfig.host} onChange={(e) => setSmtpConfig({...smtpConfig, host: e.target.value})} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t.emailMultiSender.smtpPort}</Label>
+                          <Input placeholder="465" value={smtpConfig.port} onChange={(e) => setSmtpConfig({...smtpConfig, port: e.target.value})} />
+                        </div>
+                    </div>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>{language === 'zh' ? '发件人名称（可选）' : 'Sender Name (optional)'}</Label>
+                          <Input placeholder={language === 'zh' ? '例如：张三 / 品牌名' : 'e.g. Your Name / Brand'} value={senderName} onChange={(e) => setSenderName(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t.emailMultiSender.smtpUser}</Label>
+                          <Input placeholder="your-email@example.com" value={smtpConfig.user} onChange={(e) => setSmtpConfig({...smtpConfig, user: e.target.value})} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t.emailMultiSender.smtpPass}</Label>
+                          <Input type="password" placeholder={t.emailMultiSender.smtpHint || "App Password"} value={smtpConfig.pass} onChange={(e) => setSmtpConfig({...smtpConfig, pass: e.target.value})} />
+                        </div>
+                    </div>
+                 </div>
                  <div className="text-[12px] text-muted-foreground bg-blue-50 dark:bg-blue-900/20 p-3 rounded text-blue-700 dark:text-blue-300 flex gap-2">
                     <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <span>{t.emailMultiSender.smtpHint}</span>

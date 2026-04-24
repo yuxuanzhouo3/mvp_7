@@ -1035,21 +1035,6 @@ export const en = {
         lastRefreshed: "Last Refreshed",
         loginRequiredForTemplates: "Please log in to use template saving",
         loginRequiredForHistory: "Please log in to view send history",
-        // Smart SMTP config
-        smtpAutoDetected: "Auto-detected as {provider}",
-        smtpUnknownProvider: "Unknown email provider. Please expand Advanced Settings to configure manually.",
-        smtpAdvancedSettings: "Advanced Settings",
-        smtpTestConnection: "Test Connection",
-        smtpTestSuccess: "Connection successful! SMTP config is valid ✓",
-        smtpTestFailed: "Connection failed: {error}",
-        smtpTesting: "Testing connection...",
-        smtpEmailLabel: "Sender Email",
-        smtpAuthCode: "App Password / Auth Code",
-        smtpAuthCodeHint: "Gmail requires an App Password; QQ/163 Mail requires an authorization code",
-        smtpSenderNameLabel: "Sender Name (optional)",
-        smtpSenderNameHint: "e.g. Your Name / Brand Name",
-        smtpSimpleMode: "Quick Setup",
-        smtpSimpleModeDesc: "Auto-detects your email provider. Just enter email and app password.",
         // Scraper messages
         scraper: {
             enterUrlSelectType: "Please enter a URL and select at least one data type",

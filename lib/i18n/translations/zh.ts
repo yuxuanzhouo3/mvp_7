@@ -942,22 +942,7 @@ export const zh = {
         refreshTracking: "刷新追踪数据",
         lastRefreshed: "上次刷新",
         loginRequiredForTemplates: "请登录后使用模板保存功能",
-        loginRequiredForHistory: "请登录后查看发送历史",
-        // Smart SMTP config
-        smtpAutoDetected: "已自动识别为 {provider}",
-        smtpUnknownProvider: "未识别的邮箱服务商，请展开高级设置手动填写",
-        smtpAdvancedSettings: "高级设置",
-        smtpTestConnection: "测试连接",
-        smtpTestSuccess: "连接成功！SMTP 配置可用 ✓",
-        smtpTestFailed: "连接失败：{error}",
-        smtpTesting: "正在测试连接...",
-        smtpEmailLabel: "发件邮箱",
-        smtpAuthCode: "授权码 / 应用密码",
-        smtpAuthCodeHint: "Gmail 需要应用专用密码，QQ/163 邮箱需要授权码",
-        smtpSenderNameLabel: "发件人名称（可选）",
-        smtpSenderNameHint: "例如：张三 / 品牌名",
-        smtpSimpleMode: "快速配置",
-        smtpSimpleModeDesc: "输入邮箱后自动识别服务商，只需填写邮箱和授权码",
+        loginRequiredForHistory: "请登录后查看发送历史"
     },
 
     // ==================== file-format-converter ====================
