@@ -27,11 +27,19 @@ interface EmailTemplate {
   content: string
 }
 
+interface TemplateAttachment {
+  filename: string
+  contentType: string
+  size: number
+  base64: string
+}
+
 interface UserTemplate {
   id: number
   name: string
   subject: string
   content: string
+  attachments?: TemplateAttachment[]
   created_at: string
 }
 
@@ -203,21 +211,32 @@ export function EmailMultiSender() {
     }
     if (!newTemplateName.trim()) return
     try {
+      // Use FormData to support file attachments
+      const formData = new FormData()
+      formData.set('name', newTemplateName.trim())
+      formData.set('subject', customSubject)
+      formData.set('content', customContent)
+
+      // Include current attachments in the template
+      for (const file of attachments) {
+        formData.append('attachments', file, file.name)
+      }
+
       const res = await fetch('/api/tools/email-sender/templates', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'x-user-id': String(user.id),
         },
-        body: JSON.stringify({
-          name: newTemplateName.trim(),
-          subject: customSubject,
-          content: customContent,
-        }),
+        body: formData,
       })
       const data = await res.json()
       if (data.success) {
-        toast.success(t.emailMultiSender.templateSaved)
+        const savedMsg = attachments.length > 0
+          ? (language === 'zh'
+            ? `模板已保存（含 ${attachments.length} 个附件）`
+            : `Template saved (with ${attachments.length} attachment${attachments.length > 1 ? 's' : ''})`)
+          : (t.emailMultiSender.templateSaved || 'Template saved')
+        toast.success(savedMsg)
         // Optimistic update: immediately add to local state
         if (data.template) {
           setUserTemplates(prev => [data.template, ...prev])
@@ -258,12 +277,37 @@ export function EmailMultiSender() {
     }
   }
 
+  // Restore File objects from base64-encoded template attachments
+  const restoreAttachmentsFromTemplate = (templateAttachments: TemplateAttachment[]): File[] => {
+    if (!Array.isArray(templateAttachments) || templateAttachments.length === 0) return []
+    return templateAttachments.map(att => {
+      const byteString = atob(att.base64)
+      const bytes = new Uint8Array(byteString.length)
+      for (let i = 0; i < byteString.length; i++) {
+        bytes[i] = byteString.charCodeAt(i)
+      }
+      return new File([bytes], att.filename, { type: att.contentType || 'application/octet-stream' })
+    })
+  }
+
   const handleLoadUserTemplate = (tmpl: UserTemplate) => {
     setSelectedTemplate('custom')
     setCustomSubject(tmpl.subject)
     setCustomContent(tmpl.content)
     setLoadedUserTemplateName(tmpl.name)
-    toast.success(t.emailMultiSender.templateLoaded)
+
+    // Restore template attachments
+    const restoredAttachments = restoreAttachmentsFromTemplate(tmpl.attachments || [])
+    if (restoredAttachments.length > 0) {
+      setAttachments(restoredAttachments)
+      toast.success(
+        language === 'zh'
+          ? `模板已加载（含 ${restoredAttachments.length} 个附件）`
+          : `Template loaded (with ${restoredAttachments.length} attachment${restoredAttachments.length > 1 ? 's' : ''})`
+      )
+    } else {
+      toast.success(t.emailMultiSender.templateLoaded)
+    }
   }
 
   // ====== Recipient Groups Functions ======
@@ -1707,7 +1751,14 @@ Best regards,
                           <div key={tmpl.id} className="flex items-center justify-between p-2 rounded border bg-background hover:bg-muted/40 group transition-colors">
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate">{tmpl.name}</p>
-                              <p className="text-xs text-muted-foreground truncate">{tmpl.subject || (language === 'zh' ? '无主题' : 'No subject')}</p>
+                              <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                                {tmpl.subject || (language === 'zh' ? '无主题' : 'No subject')}
+                                {Array.isArray(tmpl.attachments) && tmpl.attachments.length > 0 && (
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1 shrink-0">
+                                    📎 {tmpl.attachments.length}
+                                  </Badge>
+                                )}
+                              </p>
                             </div>
                             <div className="flex items-center gap-1 pl-2">
                               <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleLoadUserTemplate(tmpl)}>
@@ -1738,6 +1789,11 @@ Best regards,
                         setCustomContent(tmpl.content)
                         setLoadedUserTemplateName(tmpl.name)
                         setSelectedTemplate('custom')
+                        // Restore attachments from template
+                        const restoredFiles = restoreAttachmentsFromTemplate(tmpl.attachments || [])
+                        if (restoredFiles.length > 0) {
+                          setAttachments(restoredFiles)
+                        }
                       }
                     }
                   }}>
@@ -1820,7 +1876,11 @@ Best regards,
                           ) : (
                             <Button size="sm" variant="outline" onClick={() => setShowSaveTemplate(true)} disabled={!customSubject && !customContent}>
                               <Save className="w-3 h-3 mr-1" />
-                              {t.emailMultiSender.saveAsTemplate}
+                              {attachments.length > 0
+                                ? (language === 'zh'
+                                  ? `保存为模板（含 ${attachments.length} 个附件）`
+                                  : `Save as Template (with ${attachments.length} file${attachments.length > 1 ? 's' : ''})`)
+                                : (t.emailMultiSender.saveAsTemplate)}
                             </Button>
                           )}
                         </div>
